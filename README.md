@@ -190,20 +190,6 @@ You: █
 
 </details>
 
-### Supported Models
-
-#### OpenAI
-- `gpt-4o` (recommended)
-- `gpt-4-turbo`
-- `gpt-3.5-turbo`
-
-#### Anthropic
-- `claude-3-opus-20240229`
-- `claude-3-sonnet-20240229`
-- `claude-3-haiku-20240307`
-
-#### Custom
-Any OpenAI-compatible API endpoint via `XAGENT_BASE_URL`
 
 ### Plugin Development
 
