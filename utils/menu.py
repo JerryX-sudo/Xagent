@@ -24,28 +24,39 @@ class MenuItem:
 def read_key() -> str:
     """Read a single keypress."""
     fd = sys.stdin.fileno()
-    old_settings = termios.tcgetattr(fd)
+    try:
+        old_settings = termios.tcgetattr(fd)
+    except termios.error:
+        # Not a terminal, fallback
+        return sys.stdin.read(1)
+
     try:
         tty.setraw(fd)
         ch = sys.stdin.read(1)
         if ch == '\x1b':
+            # Set non-blocking to check for escape sequence
             old_flags = fcntl.fcntl(fd, fcntl.F_GETFL)
             fcntl.fcntl(fd, fcntl.F_SETFL, old_flags | os.O_NONBLOCK)
             try:
                 ch2 = sys.stdin.read(1)
+                if ch2 == '[':
+                    ch3 = sys.stdin.read(1)
+                    if ch3 == 'A':
+                        return 'up'
+                    elif ch3 == 'B':
+                        return 'down'
+                    elif ch3 == 'C':
+                        return 'right'
+                    elif ch3 == 'D':
+                        return 'left'
+                elif ch2 is None or ch2 == '':
+                    return 'esc'
             except (IOError, BlockingIOError):
-                ch2 = None
+                return 'esc'
             finally:
                 fcntl.fcntl(fd, fcntl.F_SETFL, old_flags)
-
-            if ch2 == '[':
-                ch3 = sys.stdin.read(1)
-                if ch3 == 'A':
-                    return 'up'
-                elif ch3 == 'B':
-                    return 'down'
-            elif ch2 is None or ch2 == '':
-                return 'esc'
+        elif ch == '\x03':  # Ctrl+C
+            raise KeyboardInterrupt
         return ch
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
@@ -192,7 +203,6 @@ def show_config_editor(
                 console.print("[dim]Press Enter to keep current, or type new value:[/dim]")
 
                 # Read new value (simple input, not raw mode)
-                import sys
                 termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, termios.tcgetattr(sys.stdin.fileno()))
                 try:
                     new_value = input("> ").strip()
