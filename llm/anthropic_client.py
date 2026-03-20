@@ -172,6 +172,8 @@ class AnthropicClient(BaseLLM):
                             },
                         }
                         input_json = ""
+                        # Announce tool call with special marker
+                        yield f"\x00TOOL:{event.content_block.name}\x00"
                 elif event.type == "content_block_delta":
                     if hasattr(event.delta, "text"):
                         content_parts.append(event.delta.text)

@@ -1,14 +1,15 @@
 """Interactive selection utilities for Xagent."""
 
+import os
 import sys
 import tty
 import termios
+import fcntl
 from dataclasses import dataclass
 from typing import Callable
 
 from rich.console import Console
 from rich.text import Text
-from rich.live import Live
 from rich.panel import Panel
 
 
@@ -29,13 +30,24 @@ def read_key() -> str:
         tty.setraw(fd)
         ch = sys.stdin.read(1)
         if ch == '\x1b':  # Escape sequence
-            ch2 = sys.stdin.read(1)
+            # Check if more chars available
+            old_flags = fcntl.fcntl(fd, fcntl.F_GETFL)
+            fcntl.fcntl(fd, fcntl.F_SETFL, old_flags | os.O_NONBLOCK)
+            try:
+                ch2 = sys.stdin.read(1)
+            except (IOError, BlockingIOError):
+                ch2 = None
+            finally:
+                fcntl.fcntl(fd, fcntl.F_SETFL, old_flags)
+
             if ch2 == '[':
                 ch3 = sys.stdin.read(1)
                 if ch3 == 'A':
                     return 'up'
                 elif ch3 == 'B':
                     return 'down'
+            elif ch2 is None or ch2 == '':
+                return 'esc'
         return ch
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
@@ -60,60 +72,54 @@ def select_option(
         console = Console()
 
     selected_idx = 0
+    num_options = len(options)
 
-    def render() -> Panel:
-        text = Text()
+    def render():
+        """Render the selection menu."""
+        # Move cursor up to redraw (clear previous render)
+        sys.stdout.write(f'\033[{num_options + 2}A')  # Move up
+        sys.stdout.write('\033[J')  # Clear from cursor to end
+        sys.stdout.flush()
+
+        console.print(f"[bold yellow]{title}[/bold yellow]")
         for i, opt in enumerate(options):
-            prefix = "› " if i == selected_idx else "  "
-            style = "bold cyan" if i == selected_idx else "dim"
-
-            # Option line
-            text.append(prefix, style=style)
-            text.append(opt.label, style=style)
-
-            # Shortcut hint
-            if opt.shortcut:
-                text.append(f" [{opt.shortcut}]", style="dim yellow")
-
-            text.append("\n")
-
-            # Description
-            if opt.description and i == selected_idx:
-                text.append(f"    {opt.description}\n", style="dim italic")
-
-        # Help text
-        text.append("\n")
-        text.append("↑/↓ navigate  ", style="dim")
-        text.append("Enter select  ", style="dim")
-        text.append("Esc cancel", style="dim")
-
-        return Panel(text, title=f"[bold]{title}[/bold]", border_style="yellow")
-
-    with Live(render(), console=console, refresh_per_second=30, transient=True) as live:
-        while True:
-            key = read_key()
-
-            if key == 'up':
-                selected_idx = (selected_idx - 1) % len(options)
-            elif key == 'down':
-                selected_idx = (selected_idx + 1) % len(options)
-            elif key == '\r' or key == '\n':  # Enter
-                live.stop()
-                console.print(f"[cyan]Selected:[/cyan] {options[selected_idx].label}")
-                return options[selected_idx]
-            elif key == '\x1b' or key == 'q':  # Escape or q
-                live.stop()
-                console.print("[dim]Cancelled[/dim]")
-                return None
-            # Check shortcuts
+            if i == selected_idx:
+                console.print(f"  [bold cyan]› {opt.label}[/bold cyan] [dim]- {opt.description}[/dim]")
             else:
-                for i, opt in enumerate(options):
-                    if opt.shortcut.lower() == key.lower():
-                        live.stop()
-                        console.print(f"[cyan]Selected:[/cyan] {opt.label}")
-                        return opt
+                console.print(f"    {opt.label} [dim]- {opt.description}[/dim]")
+        console.print("  [dim]↑↓ select | Enter confirm | Esc cancel[/dim]")
 
-            live.update(render())
+    # Initial render
+    console.print(f"[bold yellow]{title}[/bold yellow]")
+    for i, opt in enumerate(options):
+        if i == selected_idx:
+            console.print(f"  [bold cyan]› {opt.label}[/bold cyan] [dim]- {opt.description}[/dim]")
+        else:
+            console.print(f"    {opt.label} [dim]- {opt.description}[/dim]")
+    console.print("  [dim]↑↓ select | Enter confirm | Esc cancel[/dim]")
+
+    # Wait for key
+    while True:
+        key = read_key()
+
+        if key == 'esc':
+            console.print("[dim]Cancelled[/dim]")
+            return None
+        elif key == 'up':
+            selected_idx = (selected_idx - 1) % num_options
+            render()
+        elif key == 'down':
+            selected_idx = (selected_idx + 1) % num_options
+            render()
+        elif key == '\r' or key == '\n':  # Enter
+            console.print(f"[cyan]→ {options[selected_idx].label}[/cyan]")
+            return options[selected_idx]
+        else:
+            # Check shortcuts
+            for i, opt in enumerate(options):
+                if opt.shortcut and opt.shortcut.lower() == key.lower():
+                    console.print(f"[cyan]→ {opt.label}[/cyan]")
+                    return opt
 
     return None
 

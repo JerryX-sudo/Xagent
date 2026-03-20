@@ -1,6 +1,7 @@
 """Agent core loop for Xagent."""
 
 import json
+import time
 from typing import Any
 
 from core.config import Config
@@ -40,11 +41,27 @@ class Agent:
             self.output_manager,
         )
         self.static_memory = StaticMemory()
-        self.max_iterations = 10
+        self.max_iterations = config.max_iterations
+
+        # Interrupt handling
+        self._interrupted = False
+        self._running = False
 
         # Initialize system prompt with memory
         if not self.session.messages:
             self._init_system_prompt()
+
+    def interrupt(self) -> None:
+        """Interrupt the current operation."""
+        self._interrupted = True
+        # Try to interrupt bash tool if running
+        bash_tool = self.tools.get("bash")
+        if bash_tool and hasattr(bash_tool, "interrupt"):
+            bash_tool.interrupt()
+
+    def is_running(self) -> bool:
+        """Check if the agent is currently running."""
+        return self._running
 
     def _init_system_prompt(self) -> None:
         """Initialize system prompt with static memory."""
@@ -68,10 +85,24 @@ class Agent:
         except json.JSONDecodeError:
             return f"Error: Invalid JSON arguments: {args_str}"
 
-        self.ui.print_tool_call(name, args)
-        result = self.tools.execute(name, **args)
+        # Check for interrupt
+        if self._interrupted:
+            return "Operation interrupted by user"
 
-        return result
+        self.ui.print_tool_start(name, args)
+        start_time = time.time()
+
+        try:
+            result = self.tools.execute(name, **args)
+            elapsed = time.time() - start_time
+            success = not result.startswith("Error:")
+            self.ui.print_tool_end(name, success=success, elapsed=elapsed)
+            return result
+
+        except Exception as e:
+            elapsed = time.time() - start_time
+            self.ui.print_tool_end(name, success=False, message=str(e), elapsed=elapsed)
+            return f"Error: {e}"
 
     def _process_response(self, response: LLMResponse) -> tuple[bool, str | None]:
         """Process LLM response, execute tools if needed.
@@ -96,22 +127,45 @@ class Agent:
                 tool_calls=response.tool_calls,
             )
 
+            final_answer_result = None
+
             for tool_call in response.tool_calls:
-                result = self._execute_tool_call(tool_call)
                 tool_name = tool_call.get("function", {}).get("name", "")
+                tool_call_id = tool_call.get("id")
 
-                # Check for final_answer
-                if tool_name == "final_answer":
-                    self.ui.print_final_answer(result)
-                    return False, result
+                # Check for interrupt before executing
+                if self._interrupted:
+                    # Add empty tool result to keep message history valid
+                    self.session.add_message(
+                        "tool",
+                        "[interrupted by user]",
+                        tool_call_id=tool_call_id,
+                        name=tool_name,
+                    )
+                    continue
 
-                # Add tool result to session
+                result = self._execute_tool_call(tool_call)
+
+                # Always add tool result to session first
                 self.session.add_message(
                     "tool",
                     result,
-                    tool_call_id=tool_call.get("id"),
+                    tool_call_id=tool_call_id,
                     name=tool_name,
                 )
+
+                # Check for final_answer after adding result
+                if tool_name == "final_answer":
+                    final_answer_result = result
+
+            # If interrupted, stop the loop
+            if self._interrupted:
+                return False, None
+
+            # Handle final_answer after all tool results are added
+            if final_answer_result is not None:
+                self.ui.print_final_answer(final_answer_result)
+                return False, final_answer_result
 
             return True, None
         else:
@@ -140,63 +194,124 @@ class Agent:
 
         Returns the final answer or None if no explicit final_answer was called.
         """
-        self.session.add_message("user", user_input)
+        self._interrupted = False
+        self._running = True
 
-        for iteration in range(self.max_iterations):
-            messages = self._get_messages_with_dynamic_memory()
-            tools = self.tools.to_openai_functions()
+        try:
+            self.session.add_message("user", user_input)
 
-            # Try cache first (only for non-streaming)
-            if not stream:
-                cached = self.cache.get(messages, tools, self.config.model)
-                if cached:
-                    self.ui.print_info("(cached response)")
-                    response = LLMResponse(**cached)
-                    should_continue, final = self._process_response(response)
-                    if not should_continue:
-                        return final
-                    continue
+            for iteration in range(self.max_iterations):
+                # Check for interrupt
+                if self._interrupted:
+                    self.ui.print_interrupted()
+                    return None
 
-            # Call LLM
-            if stream:
-                response = self._run_stream(messages, tools)
-            else:
-                response = self.llm.chat(messages, tools)
-                # Cache the response
-                self.cache.set(messages, tools, self.config.model, {
-                    "content": response.content,
-                    "tool_calls": response.tool_calls,
-                    "finish_reason": response.finish_reason,
-                    "usage": response.usage,
-                })
+                messages = self._get_messages_with_dynamic_memory()
+                tools = self.tools.to_openai_functions()
 
-            should_continue, final = self._process_response(response)
-            if not should_continue:
-                return final
+                # Try cache first (only for non-streaming)
+                if not stream:
+                    cached = self.cache.get(messages, tools, self.config.model)
+                    if cached:
+                        self.ui.print_info("(cached response)")
+                        response = LLMResponse(**cached)
+                        should_continue, final = self._process_response(response)
+                        if not should_continue:
+                            return final
+                        continue
 
-        self.ui.print_warning("Max iterations reached")
-        return None
+                # Call LLM
+                if stream:
+                    response = self._run_stream(messages, tools)
+                else:
+                    # Show thinking spinner for non-streaming calls
+                    with self.ui.spinner("Thinking..."):
+                        response = self.llm.chat(messages, tools)
+                    # Cache the response
+                    self.cache.set(messages, tools, self.config.model, {
+                        "content": response.content,
+                        "tool_calls": response.tool_calls,
+                        "finish_reason": response.finish_reason,
+                        "usage": response.usage,
+                    })
+
+                # Check for interrupt after LLM call
+                if self._interrupted:
+                    self.ui.print_interrupted()
+                    return None
+
+                should_continue, final = self._process_response(response)
+                if not should_continue:
+                    return final
+
+            self.ui.print_warning("Max iterations reached")
+            return None
+        finally:
+            self._running = False
+            self._interrupted = False
 
     def _run_stream(self, messages: list[dict], tools: list[dict]) -> LLMResponse:
         """Run streaming LLM call."""
+        import sys
+        import threading
+
         gen = self.llm.chat_stream(messages, tools)
         content_parts = []
         response = None
+        has_printed_prefix = False
+        stop_spinner = threading.Event()
+        spinner_text = ["Thinking..."]
 
-        # Start streaming output
-        self.ui.console.print("[bold blue]Agent:[/bold blue] ", end="")
+        # Animated spinner in background thread
+        def spinner_thread():
+            frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+            idx = 0
+            while not stop_spinner.is_set():
+                sys.stdout.write(f"\r\033[K\033[36m{frames[idx]} {spinner_text[0]}\033[0m")
+                sys.stdout.flush()
+                idx = (idx + 1) % len(frames)
+                stop_spinner.wait(0.1)
 
-        for chunk in gen:
-            self.ui.console.print(chunk, end="", highlight=False)
-            content_parts.append(chunk)
+        # Start spinner
+        spinner = threading.Thread(target=spinner_thread, daemon=True)
+        spinner.start()
 
-        self.ui.console.print()  # Newline after streaming
-
-        # Get final response from generator
         try:
-            gen.send(None)
-        except StopIteration as e:
-            response = e.value
+            while True:
+                try:
+                    chunk = next(gen)
+                    if chunk:
+                        # Check for tool call marker
+                        if chunk.startswith("\x00TOOL:") and chunk.endswith("\x00"):
+                            tool_name = chunk[6:-1]
+                            spinner_text[0] = f"Preparing {tool_name}..."
+                            continue
+
+                        if not has_printed_prefix:
+                            # Stop spinner and clear line
+                            stop_spinner.set()
+                            spinner.join(timeout=0.2)
+                            sys.stdout.write("\r\033[K")
+                            sys.stdout.flush()
+                            self.ui.console.print("Agent: ", end="", style="bold blue")
+                            has_printed_prefix = True
+
+                        self.ui.console.print(chunk, end="", highlight=False)
+                        content_parts.append(chunk)
+                except StopIteration as e:
+                    response = e.value
+                    break
+        finally:
+            stop_spinner.set()
+            spinner.join(timeout=0.2)
+
+        # Clear spinner if no content (tool call only)
+        if not has_printed_prefix:
+            sys.stdout.write("\r\033[K")
+            sys.stdout.flush()
+
+        if has_printed_prefix:
+            self.ui.console.print()
 
         if response is None:
             response = LLMResponse(content="".join(content_parts))

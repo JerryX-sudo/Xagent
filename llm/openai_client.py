@@ -92,6 +92,7 @@ class OpenAIClient(BaseLLM):
         content_parts: list[str] = []
         tool_calls_data: dict[int, dict[str, Any]] = {}
         finish_reason = "stop"
+        tool_call_announced: set[int] = set()
 
         for chunk in stream:
             if not chunk.choices:
@@ -117,6 +118,10 @@ class OpenAIClient(BaseLLM):
                     if tc.function:
                         if tc.function.name:
                             tool_calls_data[idx]["function"]["name"] = tc.function.name
+                            # Announce tool call with special marker
+                            if idx not in tool_call_announced:
+                                tool_call_announced.add(idx)
+                                yield f"\x00TOOL:{tc.function.name}\x00"
                         if tc.function.arguments:
                             tool_calls_data[idx]["function"]["arguments"] += tc.function.arguments
 

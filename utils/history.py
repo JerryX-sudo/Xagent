@@ -1,8 +1,10 @@
 """Command line history for Xagent."""
 
+import os
 import sys
 import tty
 import termios
+import fcntl
 from pathlib import Path
 from dataclasses import dataclass, field
 
@@ -119,20 +121,52 @@ def read_input_with_history(
     cursor_pos = 0
     history.reset_position()
 
+    # Track number of display lines used
+    last_num_lines = [1]
+
+    def get_display_width(s: str) -> int:
+        """Get display width of string (CJK chars = 2 width)."""
+        width = 0
+        for c in s:
+            if ord(c) > 127:
+                width += 2  # CJK and other wide chars
+            else:
+                width += 1
+        return width
+
     def refresh_line():
         """Redraw the current line."""
-        # Clear line and rewrite
-        sys.stdout.write('\r\033[K')  # Clear line
+        import shutil
+        term_width = shutil.get_terminal_size().columns
+
+        # Clear previous lines if we used multiple
+        if last_num_lines[0] > 1:
+            for _ in range(last_num_lines[0] - 1):
+                sys.stdout.write('\033[A')  # Move up
+                sys.stdout.write('\033[2K')  # Clear line
+
+        # Clear current line and go to start
+        sys.stdout.write('\r\033[2K')
+
+        # Write prompt and input
         sys.stdout.write(prompt)
         sys.stdout.write(current_input)
+
+        # Calculate lines used now
+        total_width = len(prompt) + get_display_width(current_input)
+        last_num_lines[0] = max(1, (total_width + term_width - 1) // term_width)
+
         # Move cursor to position
         if cursor_pos < len(current_input):
-            sys.stdout.write(f'\033[{len(current_input) - cursor_pos}D')
+            after_cursor = current_input[cursor_pos:]
+            move_back = get_display_width(after_cursor)
+            if move_back > 0:
+                sys.stdout.write(f'\033[{move_back}D')
         sys.stdout.flush()
 
     try:
         tty.setraw(fd)
-        console.print(prompt, end="")
+        sys.stdout.write(prompt)
         sys.stdout.flush()
 
         while True:
@@ -143,9 +177,9 @@ def read_input_with_history(
                 sys.stdout.flush()
                 break
 
-            elif ch == '\x03':  # Ctrl+C
+            elif ch == '\x03':  # Ctrl+C - exit program
                 sys.stdout.write('\n')
-                raise KeyboardInterrupt
+                raise EOFError  # Signal to exit program
 
             elif ch == '\x04':  # Ctrl+D
                 if not current_input:
@@ -158,8 +192,25 @@ def read_input_with_history(
                     cursor_pos -= 1
                     refresh_line()
 
-            elif ch == '\x1b':  # Escape sequence
-                ch2 = sys.stdin.read(1)
+            elif ch == '\x1b':  # ESC sequence
+                # Try to read next char with non-blocking mode
+                fd = sys.stdin.fileno()
+                old_flags = fcntl.fcntl(fd, fcntl.F_GETFL)
+                fcntl.fcntl(fd, fcntl.F_SETFL, old_flags | os.O_NONBLOCK)
+
+                try:
+                    ch2 = sys.stdin.read(1)
+                except (IOError, BlockingIOError):
+                    ch2 = None
+                finally:
+                    fcntl.fcntl(fd, fcntl.F_SETFL, old_flags)
+
+                if ch2 is None or ch2 == '':
+                    # Just ESC pressed alone - interrupt operation
+                    sys.stdout.write('\n')
+                    raise KeyboardInterrupt
+
+                # It's an escape sequence, continue processing
                 if ch2 == '[':
                     ch3 = sys.stdin.read(1)
                     if ch3 == 'A':  # Up arrow
@@ -178,13 +229,11 @@ def read_input_with_history(
                     elif ch3 == 'C':  # Right arrow
                         if cursor_pos < len(current_input):
                             cursor_pos += 1
-                            sys.stdout.write('\033[C')
-                            sys.stdout.flush()
+                            refresh_line()
                     elif ch3 == 'D':  # Left arrow
                         if cursor_pos > 0:
                             cursor_pos -= 1
-                            sys.stdout.write('\033[D')
-                            sys.stdout.flush()
+                            refresh_line()
                     elif ch3 == '3':  # Delete key (followed by ~)
                         sys.stdin.read(1)  # consume ~
                         if cursor_pos < len(current_input):
@@ -196,6 +245,16 @@ def read_input_with_history(
                     elif ch3 == 'F':  # End
                         cursor_pos = len(current_input)
                         refresh_line()
+                elif ch2 == 'O':  # Alternative arrow key format (some terminals)
+                    ch3 = sys.stdin.read(1)
+                    if ch3 == 'C':  # Right
+                        if cursor_pos < len(current_input):
+                            cursor_pos += 1
+                            refresh_line()
+                    elif ch3 == 'D':  # Left
+                        if cursor_pos > 0:
+                            cursor_pos -= 1
+                            refresh_line()
 
             elif ch == '\x01':  # Ctrl+A (home)
                 cursor_pos = 0
@@ -225,7 +284,7 @@ def read_input_with_history(
                 cursor_pos = pos
                 refresh_line()
 
-            elif ch >= ' ' and ch <= '~':  # Printable characters
+            elif ch >= ' ':  # Printable characters (including Unicode/Chinese)
                 current_input = current_input[:cursor_pos] + ch + current_input[cursor_pos:]
                 cursor_pos += 1
                 refresh_line()

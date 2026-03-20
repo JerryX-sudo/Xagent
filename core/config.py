@@ -20,6 +20,8 @@ class Config:
     temperature: float = 0.7
     cache_ttl: int = 86400  # 24 hours
     cache_enabled: bool = True
+    debug: bool = False
+    max_iterations: int = 20
     dangerous_commands: list[str] = field(
         default_factory=lambda: ["rm", "sudo", "chmod", "chown", "dd", "mkfs", "kill"]
     )

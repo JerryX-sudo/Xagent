@@ -1,0 +1,133 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
+  <defs>
+    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="grad2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f093fb;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#f5576c;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="grad3" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4facfe;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#00f2fe;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="3"/>
+      <feOffset dx="2" dy="2" result="offsetblur"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.2"/>
+      </feComponentTransfer>
+      <feMerge> 
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/> 
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="800" height="600" fill="#f8f9fa"/>
+  
+  <!-- Title -->
+  <text x="400" y="40" font-family="Arial, sans-serif" font-size="24" font-weight="bold" text-anchor="middle" fill="#2d3748">
+    Xagent Architecture
+  </text>
+  
+  <!-- Core Layer -->
+  <g transform="translate(250, 80)">
+    <rect x="0" y="0" width="300" height="80" rx="10" fill="url(#grad1)" filter="url(#shadow)"/>
+    <text x="150" y="30" font-family="Arial, sans-serif" font-size="16" font-weight="bold" text-anchor="middle" fill="white">
+      Core Engine
+    </text>
+    <text x="150" y="50" font-family="Arial, sans-serif" font-size="12" text-anchor="middle" fill="white">
+      Agent • Session • History • Cache
+    </text>
+  </g>
+  
+  <!-- LLM Layer -->
+  <g transform="translate(100, 200)">
+    <rect x="0" y="0" width="250" height="80" rx="10" fill="url(#grad2)" filter="url(#shadow)"/>
+    <text x="125" y="30" font-family="Arial, sans-serif" font-size="16" font-weight="bold" text-anchor="middle" fill="white">
+      LLM Providers
+    </text>
+    <text x="125" y="50" font-family="Arial, sans-serif" font-size="12" text-anchor="middle" fill="white">
+      OpenAI • Anthropic • Custom
+    </text>
+  </g>
+  
+  <!-- Tools Layer -->
+  <g transform="translate(450, 200)">
+    <rect x="0" y="0" width="250" height="80" rx="10" fill="url(#grad3)" filter="url(#shadow)"/>
+    <text x="125" y="30" font-family="Arial, sans-serif" font-size="16" font-weight="bold" text-anchor="middle" fill="white">
+      Built-in Tools
+    </text>
+    <text x="125" y="50" font-family="Arial, sans-serif" font-size="12" text-anchor="middle" fill="white">
+      17 Tools • Plugin System
+    </text>
+  </g>
+  
+  <!-- Tool Categories -->
+  <g transform="translate(50, 320)">
+    <!-- File Tools -->
+    <rect x="0" y="0" width="140" height="60" rx="8" fill="#e6fffa" stroke="#38b2ac" stroke-width="2"/>
+    <text x="70" y="25" font-family="Arial, sans-serif" font-size="14" font-weight="bold" text-anchor="middle" fill="#234e52">
+      File Tools
+    </text>
+    <text x="70" y="45" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#2c7a7b">
+      read • write • edit
+    </text>
+  </g>
+  
+  <g transform="translate(210, 320)">
+    <!-- System Tools -->
+    <rect x="0" y="0" width="140" height="60" rx="8" fill="#fef5e7" stroke="#f6ad55" stroke-width="2"/>
+    <text x="70" y="25" font-family="Arial, sans-serif" font-size="14" font-weight="bold" text-anchor="middle" fill="#744210">
+      System Tools
+    </text>
+    <text x="70" y="45" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#975a16">
+      bash • python • ls
+    </text>
+  </g>
+  
+  <g transform="translate(370, 320)">
+    <!-- Git Tools -->
+    <rect x="0" y="0" width="140" height="60" rx="8" fill="#f0fff4" stroke="#48bb78" stroke-width="2"/>
+    <text x="70" y="25" font-family="Arial, sans-serif" font-size="14" font-weight="bold" text-anchor="middle" fill="#22543d">
+      Git Tools
+    </text>
+    <text x="70" y="45" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#276749">
+      status • diff • log
+    </text>
+  </g>
+  
+  <g transform="translate(530, 320)">
+    <!-- Web Tools -->
+    <rect x="0" y="0" width="140" height="60" rx="8" fill="#ebf8ff" stroke="#4299e1" stroke-width="2"/>
+    <text x="70" y="25" font-family="Arial, sans-serif" font-size="14" font-weight="bold" text-anchor="middle" fill="#2a4e7c">
+      Web Tools
+    </text>
+    <text x="70" y="45" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#2c5282">
+      search • fetch
+    </text>
+  </g>
+  
+  <!-- CLI Interface -->
+  <g transform="translate(250, 440)">
+    <rect x="0" y="0" width="300" height="80" rx="10" fill="#2d3748" filter="url(#shadow)"/>
+    <text x="150" y="30" font-family="Arial, sans-serif" font-size="16" font-weight="bold" text-anchor="middle" fill="white">
+      CLI Interface
+    </text>
+    <text x="150" y="50" font-family="Arial, sans-serif" font-size="12" text-anchor="middle" fill="#cbd5e0">
+      Commands • Themes • Permissions
+    </text>
+  </g>
+  
+  <!-- Connections -->
+  <path d="M 400 160 L 225 200" stroke="#cbd5e0" stroke-width="2" fill="none"/>
+  <path d="M 400 160 L 575 200" stroke="#cbd5e0" stroke-width="2" fill="none"/>
+  <path d="M 225 280 L 120 320" stroke="#cbd5e0" stroke-width="2" fill="none"/>
+  <path d="M 225 280 L 280 320" stroke="#cbd5e0" stroke-width="2" fill="none"/>
+  <path d="M 575 280 L 440 320" stroke="#cbd5e0" stroke-width="2" fill="none"/>
+  <path d="M 575 280 L 600 320" stroke="#cbd5e0" stroke-width="2" fill="none"/>
+  <path d="M 400 440 L 400 380" stroke="#cbd5e0" stroke-width="2" fill="none"/>
+</svg>

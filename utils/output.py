@@ -3,6 +3,7 @@
 import sys
 import tty
 import termios
+import time
 from dataclasses import dataclass, field
 from typing import Callable
 
@@ -10,6 +11,22 @@ from rich.console import Console
 from rich.text import Text
 from rich.panel import Panel
 from rich.live import Live
+from rich.syntax import Syntax
+
+
+# Tool icons for display
+TOOL_ICONS = {
+    "bash": "💻",
+    "edit_file": "📝",
+    "read_file": "📖",
+    "write_file": "📄",
+    "search": "🔍",
+    "glob": "🔎",
+    "grep": "🔎",
+    "final_answer": "✅",
+    "think": "💭",
+    "remember": "💾",
+}
 
 
 @dataclass
@@ -21,6 +38,8 @@ class CollapsibleOutput:
     expanded: bool = False
     preview_lines: int = 3
     exit_code: int | None = None
+    duration: float | None = None
+    tool_name: str | None = None
 
     def get_preview(self) -> str:
         """Get preview (first few lines)."""
@@ -46,6 +65,8 @@ class OutputManager:
         content: str,
         exit_code: int | None = None,
         auto_expand_on_error: bool = True,
+        duration: float | None = None,
+        tool_name: str | None = None,
     ) -> CollapsibleOutput:
         """Add a collapsible output.
 
@@ -54,6 +75,8 @@ class OutputManager:
             content: Full output content
             exit_code: Optional exit code (for commands)
             auto_expand_on_error: Expand automatically if exit code != 0
+            duration: Execution duration in seconds
+            tool_name: Name of the tool that generated this output
         """
         expanded = auto_expand_on_error and exit_code is not None and exit_code != 0
         output = CollapsibleOutput(
@@ -61,12 +84,17 @@ class OutputManager:
             content=content,
             expanded=expanded,
             exit_code=exit_code,
+            duration=duration,
+            tool_name=tool_name,
         )
         self.outputs.append(output)
         return output
 
     def render_output(self, output: CollapsibleOutput, index: int) -> Panel:
         """Render a single output section."""
+        # Tool icon
+        icon = TOOL_ICONS.get(output.tool_name, "🔧") if output.tool_name else ""
+
         # Status indicator
         if output.exit_code is not None:
             if output.exit_code == 0:
@@ -76,11 +104,16 @@ class OutputManager:
         else:
             status = ""
 
+        # Duration
+        duration_str = ""
+        if output.duration is not None:
+            duration_str = f" [dim]({output.duration:.2f}s)[/dim]"
+
         # Expand/collapse indicator
         expand_icon = "▼" if output.expanded else "▶"
         shortcut = f"[dim][{index + 1}][/dim]"
 
-        title = f"{expand_icon} {shortcut} {output.title} {status}"
+        title = f"{expand_icon} {shortcut} {icon} {output.title} {status}{duration_str}"
 
         if output.expanded:
             content = output.content
@@ -200,3 +233,55 @@ class OutputManager:
     def clear(self) -> None:
         """Clear all stored outputs."""
         self.outputs.clear()
+
+    def display_tool_panel(
+        self,
+        tool_name: str,
+        command: str | None = None,
+        content: str = "",
+        exit_code: int | None = None,
+        duration: float | None = None,
+    ) -> None:
+        """Display a formatted tool execution panel.
+
+        Creates a bordered panel showing:
+        - Tool name and icon
+        - Command (if applicable)
+        - Output content
+        - Status and timing
+        """
+        icon = TOOL_ICONS.get(tool_name, "🔧")
+
+        # Build title
+        if command:
+            cmd_display = command if len(command) <= 50 else command[:47] + "..."
+            title = f"{icon} [bold]{tool_name}:[/bold] {cmd_display}"
+        else:
+            title = f"{icon} [bold]{tool_name}[/bold]"
+
+        # Build subtitle with status
+        subtitle_parts = []
+        if exit_code is not None:
+            if exit_code == 0:
+                subtitle_parts.append("[green]✓ Completed[/green]")
+            else:
+                subtitle_parts.append(f"[red]✗ Failed (exit: {exit_code})[/red]")
+        if duration is not None:
+            subtitle_parts.append(f"[dim]{duration:.2f}s[/dim]")
+        subtitle = " ".join(subtitle_parts) if subtitle_parts else None
+
+        # Determine border style
+        if exit_code is not None and exit_code != 0:
+            border_style = "red"
+        elif exit_code == 0:
+            border_style = "green"
+        else:
+            border_style = "cyan"
+
+        panel = Panel(
+            content or "[dim](no output)[/dim]",
+            title=title,
+            subtitle=subtitle,
+            border_style=border_style,
+        )
+        self.console.print(panel)

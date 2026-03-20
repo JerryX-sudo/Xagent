@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 300" width="800" height="300">
+  <!-- Background -->
+  <rect width="800" height="300" fill="#f8f9fa"/>
+  
+  <!-- Feature Cards -->
+  <!-- Multi-model -->
+  <g transform="translate(40, 40)">
+    <rect x="0" y="0" width="220" height="100" rx="8" fill="white" stroke="#e2e8f0" stroke-width="1"/>
+    <circle cx="50" cy="50" r="25" fill="#667eea" opacity="0.1"/>
+    <text x="50" y="55" font-family="Arial, sans-serif" font-size="24" text-anchor="middle">🤖</text>
+    <text x="90" y="40" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#2d3748">Multi-model</text>
+    <text x="90" y="60" font-family="Arial, sans-serif" font-size="11" fill="#718096">OpenAI, Anthropic</text>
+    <text x="90" y="75" font-family="Arial, sans-serif" font-size="11" fill="#718096">&amp; Custom APIs</text>
+  </g>
+  
+  <!-- Tools -->
+  <g transform="translate(290, 40)">
+    <rect x="0" y="0" width="220" height="100" rx="8" fill="white" stroke="#e2e8f0" stroke-width="1"/>
+    <circle cx="50" cy="50" r="25" fill="#48bb78" opacity="0.1"/>
+    <text x="50" y="55" font-family="Arial, sans-serif" font-size="24" text-anchor="middle">🛠️</text>
+    <text x="90" y="40" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#2d3748">17+ Tools</text>
+    <text x="90" y="60" font-family="Arial, sans-serif" font-size="11" fill="#718096">Files, Git, Web</text>
+    <text x="90" y="75" font-family="Arial, sans-serif" font-size="11" fill="#718096">System, Python</text>
+  </g>
+  
+  <!-- Security -->
+  <g transform="translate(540, 40)">
+    <rect x="0" y="0" width="220" height="100" rx="8" fill="white" stroke="#e2e8f0" stroke-width="1"/>
+    <circle cx="50" cy="50" r="25" fill="#f56565" opacity="0.1"/>
+    <text x="50" y="55" font-family="Arial, sans-serif" font-size="24" text-anchor="middle">🔒</text>
+    <text x="90" y="40" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#2d3748">Safe Execution</text>
+    <text x="90" y="60" font-family="Arial, sans-serif" font-size="11" fill="#718096">Review actions</text>
+    <text x="90" y="75" font-family="Arial, sans-serif" font-size="11" fill="#718096">before run</text>
+  </g>
+  
+  <!-- Session -->
+  <g transform="translate(40, 160)">
+    <rect x="0" y="0" width="220" height="100" rx="8" fill="white" stroke="#e2e8f0" stroke-width="1"/>
+    <circle cx="50" cy="50" r="25" fill="#ed8936" opacity="0.1"/>
+    <text x="50" y="55" font-family="Arial, sans-serif" font-size="24" text-anchor="middle">💾</text>
+    <text x="90" y="40" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#2d3748">Sessions</text>
+    <text x="90" y="60" font-family="Arial, sans-serif" font-size="11" fill="#718096">Save &amp; Load</text>
+    <text x="90" y="75" font-family="Arial, sans-serif" font-size="11" fill="#718096">conversations</text>
+  </g>
+  
+  <!-- Cache -->
+  <g transform="translate(290, 160)">
+    <rect x="0" y="0" width="220" height="100" rx="8" fill="white" stroke="#e2e8f0" stroke-width="1"/>
+    <circle cx="50" cy="50" r="25" fill="#38b2ac" opacity="0.1"/>
+    <text x="50" y="55" font-family="Arial, sans-serif" font-size="24" text-anchor="middle">⚡</text>
+    <text x="90" y="40" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#2d3748">Smart Cache</text>
+    <text x="90" y="60" font-family="Arial, sans-serif" font-size="11" fill="#718096">Save tokens</text>
+    <text x="90" y="75" font-family="Arial, sans-serif" font-size="11" fill="#718096">&amp; reduce costs</text>
+  </g>
+  
+  <!-- Themes -->
+  <g transform="translate(540, 160)">
+    <rect x="0" y="0" width="220" height="100" rx="8" fill="white" stroke="#e2e8f0" stroke-width="1"/>
+    <circle cx="50" cy="50" r="25" fill="#9f7aea" opacity="0.1"/>
+    <text x="50" y="55" font-family="Arial, sans-serif" font-size="24" text-anchor="middle">🎨</text>
+    <text x="90" y="40" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#2d3748">Themes</text>
+    <text x="90" y="60" font-family="Arial, sans-serif" font-size="11" fill="#718096">Beautiful</text>
+    <text x="90" y="75" font-family="Arial, sans-serif" font-size="11" fill="#718096">terminal UI</text>
+  </g>
+</svg>

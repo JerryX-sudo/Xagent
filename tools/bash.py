@@ -2,11 +2,18 @@
 
 import subprocess
 import shlex
+import select
+import signal
+import time
+import threading
 from typing import Any
 
 from rich.console import Console
 from rich.syntax import Syntax
 from rich.panel import Panel
+from rich.live import Live
+from rich.spinner import Spinner
+from rich.text import Text
 
 from tools.base import BaseTool
 from core.permission import PermissionManager
@@ -45,6 +52,8 @@ class BashTool(BaseTool):
         self.permission_manager = permission_manager or PermissionManager()
         self.output_manager = output_manager
         self.console = Console()
+        self._current_process: subprocess.Popen | None = None
+        self._interrupted = False
 
     def _is_forbidden(self, command: str) -> bool:
         """Check if command would cause recursive xagent call."""
@@ -82,11 +91,27 @@ class BashTool(BaseTool):
 
         return False
 
+    def interrupt(self) -> None:
+        """Interrupt the currently running command."""
+        self._interrupted = True
+        if self._current_process and self._current_process.poll() is None:
+            try:
+                self._current_process.send_signal(signal.SIGINT)
+            except (ProcessLookupError, OSError):
+                pass
+
+    def is_running(self) -> bool:
+        """Check if a command is currently running."""
+        return self._current_process is not None and self._current_process.poll() is None
+
     def run(self, **kwargs: Any) -> str:
-        """Execute the bash command."""
+        """Execute the bash command with streaming output."""
         command = kwargs.get("command", "")
         if not command:
             return "Error: No command provided"
+
+        # Reset interrupt flag
+        self._interrupted = False
 
         # Block recursive xagent calls
         if self._is_forbidden(command):
@@ -109,41 +134,105 @@ class BashTool(BaseTool):
             ):
                 return "Command execution cancelled by user"
 
+        start_time = time.time()
+        output_lines = []
+        stderr_lines = []
+
         try:
-            result = subprocess.run(
+            # Use Popen for streaming output
+            self._current_process = subprocess.Popen(
                 command,
                 shell=True,
-                capture_output=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True,
-                timeout=120,
+                bufsize=1,  # Line buffered
             )
 
-            output = ""
-            if result.stdout:
-                output += result.stdout
-            if result.stderr:
+            # Print command header
+            cmd_display = command if len(command) <= 60 else command[:57] + "..."
+            self.console.print(f"[dim]┌─ 💻 [bold]bash:[/bold] {cmd_display}[/dim]")
+            self.console.print("[dim]│[/dim]")
+
+            # Read output in real-time using select
+            stdout_fd = self._current_process.stdout.fileno()
+            stderr_fd = self._current_process.stderr.fileno()
+
+            while True:
+                # Check for interrupt
+                if self._interrupted:
+                    self._current_process.terminate()
+                    self._current_process.wait(timeout=1)
+                    self.console.print("[dim]│[/dim] [yellow]⚠ Interrupted by user[/yellow]")
+                    break
+
+                # Check if process has finished
+                if self._current_process.poll() is not None:
+                    # Read any remaining output
+                    remaining_stdout = self._current_process.stdout.read()
+                    remaining_stderr = self._current_process.stderr.read()
+                    if remaining_stdout:
+                        for line in remaining_stdout.splitlines():
+                            output_lines.append(line)
+                            self.console.print(f"[dim]│[/dim] {line}")
+                    if remaining_stderr:
+                        for line in remaining_stderr.splitlines():
+                            stderr_lines.append(line)
+                            self.console.print(f"[dim]│[/dim] [red]{line}[/red]")
+                    break
+
+                # Use select for non-blocking read
+                ready, _, _ = select.select([stdout_fd, stderr_fd], [], [], 0.1)
+
+                for fd in ready:
+                    if fd == stdout_fd:
+                        line = self._current_process.stdout.readline()
+                        if line:
+                            line = line.rstrip('\n')
+                            output_lines.append(line)
+                            self.console.print(f"[dim]│[/dim] {line}")
+                    elif fd == stderr_fd:
+                        line = self._current_process.stderr.readline()
+                        if line:
+                            line = line.rstrip('\n')
+                            stderr_lines.append(line)
+                            self.console.print(f"[dim]│[/dim] [red]{line}[/red]")
+
+            returncode = self._current_process.returncode or 0
+            elapsed = time.time() - start_time
+
+            # Print footer
+            if self._interrupted:
+                status = "[yellow]⚠ Interrupted[/yellow]"
+            elif returncode == 0:
+                status = "[green]✓ Completed[/green]"
+            else:
+                status = f"[red]✗ Failed (exit: {returncode})[/red]"
+
+            self.console.print(f"[dim]└─ {status} in {elapsed:.2f}s[/dim]")
+
+            # Build output string for agent
+            output = "\n".join(output_lines)
+            if stderr_lines:
                 if output:
                     output += "\n"
-                output += f"[stderr]\n{result.stderr}"
+                output += f"[stderr]\n" + "\n".join(stderr_lines)
 
-            if result.returncode != 0:
-                output += f"\n[exit code: {result.returncode}]"
+            if returncode != 0:
+                output += f"\n[exit code: {returncode}]"
+
+            if self._interrupted:
+                output += "\n[interrupted by user]"
 
             output = output.strip() or "(no output)"
-
-            # Display with collapsible output if manager available
-            if self.output_manager:
-                # Truncate command for title if too long
-                title = command if len(command) <= 50 else command[:47] + "..."
-                self.output_manager.display_output(
-                    title=f"$ {title}",
-                    content=output,
-                    exit_code=result.returncode,
-                )
 
             return output
 
         except subprocess.TimeoutExpired:
+            if self._current_process:
+                self._current_process.kill()
             return "Error: Command timed out after 120 seconds"
         except Exception as e:
             return f"Error executing command: {e}"
+        finally:
+            self._current_process = None

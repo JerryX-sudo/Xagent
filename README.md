@@ -1,37 +1,89 @@
 # Xagent
 
-A lightweight terminal Agent framework - small but powerful.
+<div align="center">
 
-## Installation
+<img src="assets/xagent_logo.svg" alt="Xagent Logo" width="120">
+
+### 🚀 A Lightweight Terminal Agent Framework
+
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.12%2B-blue.svg)](https://www.python.org/)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+
+**Small but Powerful** • **Multi-model Support** • **17+ Built-in Tools** • **Extensible**
+
+[Features](#-features) • [Quick Start](#-quick-start) • [Documentation](#-documentation) • [Contributing](#-contributing)
+
+</div>
+
+---
+
+## 🎬 Demo
+
+<div align="center">
+<img src="assets/demo.svg" alt="Xagent Demo" width="100%">
+</div>
+
+## ✨ Features
+
+<img src="assets/features.svg" alt="Features Overview" width="100%">
+
+### Why Xagent?
+
+- **🤖 Multi-model Support** - Works with OpenAI, Anthropic, and any OpenAI-compatible API
+- **🛠️ Rich Toolset** - 17+ built-in tools for files, git, web, and system operations  
+- **🔒 Security First** - Permission control with diff preview before dangerous operations
+- **⚡ Smart Caching** - Intelligent request caching to save tokens and reduce costs
+- **💾 Session Management** - Save, load, and export conversations
+- **🎨 Beautiful CLI** - Customizable themes and intuitive interface
+- **🔌 Plugin System** - Easy to extend with custom tools
+
+## 🎯 Architecture
+
+<img src="assets/architecture.svg" alt="Architecture Diagram" width="100%">
+
+## 🚀 Quick Start
+
+<div align="center">
+<img src="assets/installation.svg" alt="Installation Steps" width="100%">
+</div>
+
+### Prerequisites
+
+- Python 3.12 or higher
+- An API key from OpenAI or Anthropic
+
+### Installation
 
 ```bash
+# Using pip
 pip install git+https://github.com/yourusername/xagent.git
+
+# Or clone and install locally
+git clone https://github.com/yourusername/xagent.git
+cd xagent
+pip install -e .
 ```
 
-## Quick Start
+### Configuration
 
-### Option 1: Environment Variables (Recommended)
+#### Option 1: Environment Variables (Recommended)
 
 ```bash
 # Set your API credentials
 export XAGENT_API_KEY="your-api-key"
-export XAGENT_MODEL="gpt-4o"  # or claude-sonnet-4-20250514
+export XAGENT_MODEL="gpt-4o"  # or claude-3-opus-20240229
 
-# Optional: custom endpoint
+# Optional: custom endpoint for OpenAI-compatible APIs
 export XAGENT_BASE_URL="https://api.openai.com/v1"
 
-# Run
+# Run Xagent
 xagent
 ```
 
-### Option 2: Interactive Setup
+#### Option 2: Interactive Setup
 
-Just run `xagent` - it will prompt you for:
-1. API Key
-2. Base URL (optional, press Enter for default)
-3. Model name
-
-The connection will be tested before starting. If it fails, you can retry with different settings.
+Simply run `xagent` without configuration - it will guide you through setup:
 
 ```bash
 $ xagent
@@ -42,157 +94,290 @@ $ xagent
 ╰──────────────────────────────────────╯
 
 API Key: ********
-Base URL:
-Model [gpt-4o]:
+Base URL: [Enter for default]
+Model [gpt-4o]: 
 
 Testing connection...
 ✓ Connection successful!
+
+╭─────────────────────────────────────╮
+│  Welcome to Xagent! Type /help     │
+│  for available commands.            │
+╰─────────────────────────────────────╯
+
+You: █
 ```
 
-## Environment Variables
+## 📖 Documentation
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `XAGENT_API_KEY` | Yes | Your API key |
-| `XAGENT_MODEL` | No | Model name (default: gpt-4o) |
-| `XAGENT_BASE_URL` | No | Custom API endpoint |
+### Workflow
 
-**Supported models:**
-- OpenAI: `gpt-4o`, `gpt-4-turbo`, `gpt-3.5-turbo`
-- Anthropic: `claude-sonnet-4-20250514`, `claude-opus-4-20250514`
-- Any OpenAI-compatible endpoint via `XAGENT_BASE_URL`
+<img src="assets/workflow.svg" alt="Workflow Diagram" width="100%">
 
-## Usage
+### Available Commands
 
-### Interactive Mode
+| Command | Description | Example |
+|---------|-------------|---------|
+| `/help` | Show all available commands | `/help` |
+| `/clear` | Clear current conversation | `/clear` |
+| `/exit` or `/quit` | Exit Xagent | `/exit` |
+| `/memory` | View or manage persistent memory | `/memory add "Important note"` |
+| `/history` | Show conversation history | `/history` |
+| `/save [name]` | Save current session | `/save my_session` |
+| `/load <name>` | Load a saved session | `/load my_session` |
+| `/export [name]` | Export conversation to markdown | `/export chat_log` |
+| `/cache` | View or clear request cache | `/cache clear` |
+| `/tools` | List all available tools | `/tools` |
+| `/theme [name]` | View or change color theme | `/theme monokai` |
+| `/permissions` | Manage auto-approval settings | `/permissions` |
+
+### Built-in Tools
+
+<details>
+<summary><b>📁 File Operations</b></summary>
+
+| Tool | Description |
+|------|-------------|
+| `read_file` | Read file contents with line number support |
+| `write_file` | Create or overwrite files with diff preview |
+| `edit` | Edit files with intelligent diff generation |
+| `glob` | Find files by pattern (e.g., `**/*.py`) |
+| `grep` | Search file contents with regex support |
+| `ls` | List directory contents with details |
+
+</details>
+
+<details>
+<summary><b>💻 System & Code</b></summary>
+
+| Tool | Description |
+|------|-------------|
+| `bash` | Execute shell commands safely |
+| `python` | Run Python code in isolated environment |
+
+</details>
+
+<details>
+<summary><b>🔀 Git Operations</b></summary>
+
+| Tool | Description |
+|------|-------------|
+| `git` | Execute any git command |
+| `git_status` | Quick repository status check |
+| `git_diff` | View changes with syntax highlighting |
+| `git_log` | Browse commit history |
+
+</details>
+
+<details>
+<summary><b>🌐 Web Tools</b></summary>
+
+| Tool | Description |
+|------|-------------|
+| `web_search` | Search the web via DuckDuckGo |
+| `web_fetch` | Fetch and parse web page content |
+
+</details>
+
+<details>
+<summary><b>🤝 Interaction</b></summary>
+
+| Tool | Description |
+|------|-------------|
+| `ask_human` | Ask user for clarification |
+| `memory` | Manage working memory |
+| `final_answer` | Provide structured response |
+
+</details>
+
+### Supported Models
+
+#### OpenAI
+- `gpt-4o` (recommended)
+- `gpt-4-turbo`
+- `gpt-3.5-turbo`
+
+#### Anthropic
+- `claude-3-opus-20240229`
+- `claude-3-sonnet-20240229`
+- `claude-3-haiku-20240307`
+
+#### Custom
+Any OpenAI-compatible API endpoint via `XAGENT_BASE_URL`
+
+### Plugin Development
+
+Create custom tools by adding Python files to `~/.xagent/plugins/`:
+
+```python
+# ~/.xagent/plugins/my_custom_tool.py
+from tools.base import BaseTool
+
+class MyCustomTool(BaseTool):
+    """A custom tool that does something special"""
+    
+    name = "my_custom_tool"
+    description = "Performs a custom operation"
+    parameters = {
+        "type": "object",
+        "properties": {
+            "input": {
+                "type": "string",
+                "description": "Input for the tool"
+            },
+            "option": {
+                "type": "boolean",
+                "description": "Optional flag",
+                "default": False
+            }
+        },
+        "required": ["input"]
+    }
+    
+    def run(self, **kwargs):
+        input_text = kwargs.get("input")
+        option = kwargs.get("option", False)
+        
+        # Your custom logic here
+        result = f"Processed: {input_text}"
+        
+        if option:
+            result += " (with option enabled)"
+            
+        return result
+```
+
+Your plugin will be automatically loaded on the next run.
+
+### File Organization
+
+```
+~/.xagent/
+├── 📝 memory.md        # Persistent memory across sessions
+├── 📜 history          # Command history
+├── ⚡ cache/           # Request cache for token savings
+├── 💾 sessions/        # Saved conversation sessions
+├── 📤 exports/         # Exported conversations
+├── 🔌 plugins/         # Custom tool plugins
+└── 📊 logs/            # Debug and error logs
+```
+
+## ⌨️ Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `↑` / `↓` | Navigate command history |
+| `Ctrl+A` | Move cursor to line start |
+| `Ctrl+E` | Move cursor to line end |
+| `Ctrl+K` | Delete from cursor to end of line |
+| `Ctrl+U` | Delete from cursor to start of line |
+| `Ctrl+W` | Delete previous word |
+| `Ctrl+L` | Clear screen |
+| `Ctrl+C` | Cancel current input/operation |
+| `Tab` | Auto-complete commands |
+
+## 🔧 Advanced Usage
+
+### Single Question Mode
+
+Quick one-off questions without entering interactive mode:
 
 ```bash
-xagent
+xagent ask "What Python files are in this directory?"
 ```
 
-### Single Question
-
-```bash
-xagent ask "What files are in this directory?"
-```
-
-### Update
+### Update to Latest Version
 
 ```bash
 xagent update
 ```
 
-## Commands
+### Debug Mode
 
-| Command | Description |
-|---------|-------------|
-| `/help` | Show help |
-| `/clear` | Clear conversation |
-| `/exit` | Exit xagent |
-| `/memory` | View/manage persistent memory |
-| `/history` | Show conversation history |
-| `/save [name]` | Save session |
-| `/load <name>` | Load session |
-| `/export [name]` | Export to markdown |
-| `/cache` | View/clear cache |
-| `/tools` | List available tools |
-| `/theme [name]` | View/change theme |
-| `/permissions` | Manage auto-approve |
-
-## Built-in Tools
-
-| Tool | Description |
-|------|-------------|
-| `bash` | Execute shell commands |
-| `python` | Execute Python code |
-| `edit` | Edit files with diff preview |
-| `write_file` | Create/overwrite files |
-| `read_file` | Read file contents |
-| `glob` | Find files by pattern |
-| `grep` | Search file contents |
-| `ls` | List directory |
-| `git` | Git operations |
-| `git_status` | Quick git status |
-| `git_diff` | View git diff |
-| `git_log` | View git history |
-| `web_search` | Search the web |
-| `web_fetch` | Fetch web page content |
-| `ask_human` | Ask user questions |
-| `memory` | Manage session memory |
-
-## Features
-
-- **Multi-model**: OpenAI, Anthropic, any OpenAI-compatible API
-- **17 Built-in Tools**: Shell, Python, files, git, web, and more
-- **Permission Control**: Approve/deny actions with diff preview
-- **Arrow Key History**: ↑↓ to navigate command history
-- **Session Management**: Save, load, and export conversations
-- **Request Caching**: Save tokens with intelligent caching
-- **Plugin System**: Add custom tools in `~/.xagent/plugins/`
-- **Themes**: Customizable color schemes
-
-## Keyboard Shortcuts
-
-| Key | Action |
-|-----|--------|
-| ↑/↓ | Navigate history |
-| Ctrl+A | Move to line start |
-| Ctrl+E | Move to line end |
-| Ctrl+K | Delete to end of line |
-| Ctrl+U | Delete to start of line |
-| Ctrl+W | Delete word |
-| Ctrl+C | Cancel current input |
-
-## Plugins
-
-Create custom tools in `~/.xagent/plugins/`:
-
-```python
-# ~/.xagent/plugins/my_tool.py
-from tools.base import BaseTool
-
-class MyTool(BaseTool):
-    name = "my_tool"
-    description = "Does something custom"
-    parameters = {
-        "type": "object",
-        "properties": {
-            "input": {"type": "string"},
-        },
-        "required": ["input"],
-    }
-
-    def run(self, **kwargs):
-        return f"Result: {kwargs.get('input')}"
-```
-
-## File Locations
-
-```
-~/.xagent/
-├── memory.md        # Persistent memory
-├── history          # Command history
-├── cache/           # Request cache
-├── sessions/        # Saved sessions
-├── exports/         # Exported conversations
-├── plugins/         # Custom tools
-└── logs/            # Debug logs
-```
-
-## Development
+Enable verbose logging for troubleshooting:
 
 ```bash
-# Clone and install
-git clone https://github.com/yourusername/xagent.git
-cd xagent
-pip install -e ".[dev]"
-
-# Run tests
-pytest tests/ -v
+export XAGENT_DEBUG=true
+xagent
 ```
 
-See [DEVELOPMENT.md](DEVELOPMENT.md) for architecture details.
+## 🚧 Development
 
-## License
+### Setup Development Environment
 
-Apache-2.0
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/xagent.git
+cd xagent
+
+# Create virtual environment
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install in development mode with extras
+pip install -e ".[dev]"
+```
+
+### Running Tests
+
+```bash
+# Run all tests
+pytest tests/ -v
+
+# Run with coverage
+pytest tests/ --cov=. --cov-report=html
+
+# Run specific test file
+pytest tests/test_tools.py -v
+```
+
+### Code Quality
+
+```bash
+# Format code
+black .
+
+# Type checking
+mypy .
+
+# Linting
+ruff check .
+```
+
+### Architecture Details
+
+See [DEVELOPMENT.md](DEVELOPMENT.md) for detailed architecture documentation and contribution guidelines.
+
+## 🤝 Contributing
+
+We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
+
+### How to Contribute
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## 📄 License
+
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- Built with [Rich](https://github.com/Textualize/rich) for beautiful terminal formatting
+- Powered by [OpenAI](https://openai.com/) and [Anthropic](https://www.anthropic.com/) APIs
+- Inspired by the Unix philosophy: do one thing and do it well
+
+## 📮 Support
+
+- **Issues**: [GitHub Issues](https://github.com/yourusername/xagent/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/yourusername/xagent/discussions)
+- **Email**: support@xagent.dev
+
+---
+
+<div align="center">
+<sub>Made with ❤️ by the Xagent Team</sub>
+</div>

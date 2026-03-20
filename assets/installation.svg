@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 300" width="800" height="300">
+  <defs>
+    <linearGradient id="step1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="step2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#48bb78;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#38a169;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="step3" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ed8936;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#dd6b20;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="800" height="300" fill="#f7fafc"/>
+  
+  <!-- Step 1 -->
+  <g transform="translate(100, 50)">
+    <circle cx="50" cy="50" r="40" fill="url(#step1)"/>
+    <text x="50" y="55" font-family="Arial, sans-serif" font-size="24" font-weight="bold" text-anchor="middle" fill="white">1</text>
+    <text x="50" y="110" font-family="Arial, sans-serif" font-size="14" font-weight="bold" text-anchor="middle" fill="#2d3748">Install</text>
+    <rect x="-30" y="130" width="160" height="80" rx="6" fill="#edf2f7" stroke="#cbd5e0"/>
+    <text x="50" y="155" font-family="monospace" font-size="10" text-anchor="middle" fill="#2d3748">
+      <tspan x="50" dy="0">pip install</tspan>
+      <tspan x="50" dy="15">git+https://github.com/</tspan>
+      <tspan x="50" dy="15">yourusername/xagent.git</tspan>
+    </text>
+  </g>
+  
+  <!-- Arrow 1->2 -->
+  <path d="M 190 100 L 260 100" stroke="#cbd5e0" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#cbd5e0"/>
+    </marker>
+  </defs>
+  
+  <!-- Step 2 -->
+  <g transform="translate(300, 50)">
+    <circle cx="50" cy="50" r="40" fill="url(#step2)"/>
+    <text x="50" y="55" font-family="Arial, sans-serif" font-size="24" font-weight="bold" text-anchor="middle" fill="white">2</text>
+    <text x="50" y="110" font-family="Arial, sans-serif" font-size="14" font-weight="bold" text-anchor="middle" fill="#2d3748">Configure</text>
+    <rect x="-30" y="130" width="160" height="80" rx="6" fill="#edf2f7" stroke="#cbd5e0"/>
+    <text x="50" y="155" font-family="monospace" font-size="10" text-anchor="middle" fill="#2d3748">
+      <tspan x="50" dy="0">export XAGENT_API_KEY=</tspan>
+      <tspan x="50" dy="15">"your-api-key"</tspan>
+      <tspan x="50" dy="15">export XAGENT_MODEL=</tspan>
+      <tspan x="50" dy="15">"gpt-4o"</tspan>
+    </text>
+  </g>
+  
+  <!-- Arrow 2->3 -->
+  <path d="M 390 100 L 460 100" stroke="#cbd5e0" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+  
+  <!-- Step 3 -->
+  <g transform="translate(500, 50)">
+    <circle cx="50" cy="50" r="40" fill="url(#step3)"/>
+    <text x="50" y="55" font-family="Arial, sans-serif" font-size="24" font-weight="bold" text-anchor="middle" fill="white">3</text>
+    <text x="50" y="110" font-family="Arial, sans-serif" font-size="14" font-weight="bold" text-anchor="middle" fill="#2d3748">Run</text>
+    <rect x="-30" y="130" width="160" height="80" rx="6" fill="#edf2f7" stroke="#cbd5e0"/>
+    <text x="50" y="165" font-family="monospace" font-size="12" text-anchor="middle" fill="#2d3748">
+      <tspan x="50" dy="0">xagent</tspan>
+    </text>
+    <text x="50" y="190" font-family="Arial, sans-serif" font-size="10" text-anchor="middle" fill="#718096">
+      Ready to use! 🚀
+    </text>
+  </g>
+</svg>

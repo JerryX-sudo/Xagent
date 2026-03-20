@@ -14,10 +14,112 @@ from core.export import export_to_markdown
 from core.theme import Theme, get_theme, set_theme
 from utils.terminal import TerminalUI
 from utils.history import InputHistory, read_input_with_history
+from utils.menu import MenuItem, show_menu, show_config_editor
 
 
 console = Console()
 ui = TerminalUI()
+
+
+# Define all available commands
+COMMANDS = [
+    MenuItem("help", "Show help message"),
+    MenuItem("clear", "Clear conversation history"),
+    MenuItem("config", "Edit configuration (model, max_iterations, etc.)"),
+    MenuItem("memory", "Manage static memory"),
+    MenuItem("history", "Show conversation history"),
+    MenuItem("save", "Save current session"),
+    MenuItem("load", "Load a saved session"),
+    MenuItem("sessions", "List saved sessions"),
+    MenuItem("cache", "Manage request cache"),
+    MenuItem("tools", "List available tools"),
+    MenuItem("skills", "List available skills"),
+    MenuItem("permissions", "Manage tool permissions"),
+    MenuItem("export", "Export conversation to markdown"),
+    MenuItem("theme", "Change color theme"),
+    MenuItem("exit", "Exit Xagent"),
+]
+
+
+def show_command_menu() -> str | None:
+    """Show interactive command menu. Returns selected command or None."""
+    result = show_menu(COMMANDS, "Commands", console)
+    if result:
+        return f"/{result.name}"
+    return None
+
+
+def handle_config(agent: Agent) -> None:
+    """Handle interactive config editing."""
+    config = agent.config
+
+    def set_model(v):
+        config.model = v
+
+    def set_max_iterations(v):
+        try:
+            config.max_iterations = int(v)
+            agent.max_iterations = int(v)
+        except ValueError:
+            ui.print_error("Invalid number")
+
+    def set_temperature(v):
+        try:
+            config.temperature = float(v)
+        except ValueError:
+            ui.print_error("Invalid number")
+
+    def set_max_tokens(v):
+        try:
+            config.max_tokens = int(v)
+        except ValueError:
+            ui.print_error("Invalid number")
+
+    def set_base_url(v):
+        config.base_url = v if v else None
+
+    def set_api_key(v):
+        config.api_key = v
+
+    config_items = [
+        ("Model", "LLM model to use", config.model, set_model),
+        ("Max Iterations", "Maximum agent loop iterations", str(config.max_iterations), set_max_iterations),
+        ("Temperature", "Model temperature (0-1)", str(config.temperature), set_temperature),
+        ("Max Tokens", "Maximum response tokens", str(config.max_tokens), set_max_tokens),
+        ("Base URL", "API base URL (optional)", config.base_url or "", set_base_url),
+        ("API Key", "API key", config.api_key, set_api_key),
+    ]
+
+    show_config_editor(config_items, "Configuration", console)
+
+
+def handle_memory_menu(agent: Agent) -> None:
+    """Handle memory submenu."""
+    items = [
+        MenuItem("view", "View static memory"),
+        MenuItem("add", "Add to static memory"),
+        MenuItem("clear", "Clear static memory"),
+    ]
+
+    result = show_menu(items, "Memory", console)
+    if result:
+        if result.name == "view":
+            content = agent.static_memory.read()
+            console.print(content)
+        elif result.name == "add":
+            console.print("[cyan]Enter text to add to memory:[/cyan]")
+            try:
+                text = input("> ").strip()
+                if text:
+                    agent.static_memory.append(text)
+                    agent.refresh_memory()
+                    ui.print_success("Added to memory")
+            except (KeyboardInterrupt, EOFError):
+                pass
+        elif result.name == "clear":
+            agent.static_memory.clear()
+            agent.refresh_memory()
+            ui.print_success("Memory cleared")
 
 
 def handle_command(cmd: str, agent: Agent, skills: SkillRegistry) -> bool:
@@ -60,8 +162,8 @@ def handle_command(cmd: str, agent: Agent, skills: SkillRegistry) -> bool:
 
     elif command == "/memory":
         if len(parts) == 1:
-            content = agent.static_memory.read()
-            ui.console.print(content)
+            # Show interactive menu
+            handle_memory_menu(agent)
         elif parts[1] == "add" and len(parts) > 2:
             agent.static_memory.append(parts[2])
             agent.refresh_memory()
@@ -70,8 +172,11 @@ def handle_command(cmd: str, agent: Agent, skills: SkillRegistry) -> bool:
             agent.static_memory.clear()
             agent.refresh_memory()
             ui.print_success("Memory cleared")
+        elif parts[1] == "view":
+            content = agent.static_memory.read()
+            ui.console.print(content)
         else:
-            ui.print_error("Usage: /memory [add <text> | clear]")
+            ui.print_error("Usage: /memory [view | add <text> | clear]")
 
     elif command == "/save":
         name = parts[1] if len(parts) > 1 else None
@@ -108,13 +213,19 @@ def handle_command(cmd: str, agent: Agent, skills: SkillRegistry) -> bool:
                 ui.console.print(f"  {key}: {value}")
 
     elif command == "/config":
-        ui.console.print("[cyan]Current Configuration:[/cyan]")
-        ui.console.print(f"  Model Type: {agent.config.model_type}")
-        ui.console.print(f"  Model: {agent.config.model}")
-        ui.console.print(f"  Base URL: {agent.config.base_url or 'default'}")
-        ui.console.print(f"  Max Tokens: {agent.config.max_tokens}")
-        ui.console.print(f"  Temperature: {agent.config.temperature}")
-        ui.console.print(f"  Cache Enabled: {agent.config.cache_enabled}")
+        if len(parts) == 1:
+            # Show interactive config editor
+            handle_config(agent)
+        else:
+            # Show current config
+            ui.console.print("[cyan]Current Configuration:[/cyan]")
+            ui.console.print(f"  Model Type: {agent.config.model_type}")
+            ui.console.print(f"  Model: {agent.config.model}")
+            ui.console.print(f"  Base URL: {agent.config.base_url or 'default'}")
+            ui.console.print(f"  Max Tokens: {agent.config.max_tokens}")
+            ui.console.print(f"  Max Iterations: {agent.config.max_iterations}")
+            ui.console.print(f"  Temperature: {agent.config.temperature}")
+            ui.console.print(f"  Cache Enabled: {agent.config.cache_enabled}")
 
     elif command == "/tools":
         tools = agent.tools.list_tools()
@@ -301,7 +412,7 @@ def run_interactive():
     # Main loop
     while True:
         try:
-            user_input = read_input_with_history("[bold green]You:[/bold green] ", history, ui.console)
+            user_input = read_input_with_history("You: ", history, ui.console)
 
             if not user_input.strip():
                 continue
@@ -310,7 +421,14 @@ def run_interactive():
             history.add(user_input)
 
             # Handle commands
-            if user_input.startswith("/"):
+            if user_input == "/":
+                # Show interactive command menu
+                selected = show_command_menu()
+                if selected:
+                    if not handle_command(selected, agent, skills):
+                        break
+                continue
+            elif user_input.startswith("/"):
                 if not handle_command(user_input, agent, skills):
                     break
                 continue
@@ -319,9 +437,15 @@ def run_interactive():
             agent.run(user_input, stream=True)
 
         except KeyboardInterrupt:
+            # ESC pressed - interrupt current operation
             ui.console.print()
-            ui.print_info("Use /exit to quit")
+            if agent.is_running():
+                agent.interrupt()
+            ui.print_warning("Interrupted (ESC)")
         except EOFError:
+            # Ctrl+C or Ctrl+D - exit program
+            ui.console.print()
+            ui.print_info("Goodbye!")
             break
         except Exception as e:
             ui.print_error(str(e))

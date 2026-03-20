@@ -1,5 +1,9 @@
 """Terminal UI utilities for Xagent."""
 
+import time
+from contextlib import contextmanager
+from typing import Generator
+
 from rich.console import Console
 from rich.panel import Panel
 from rich.markdown import Markdown
@@ -7,6 +11,22 @@ from rich.syntax import Syntax
 from rich.table import Table
 from rich.live import Live
 from rich.spinner import Spinner
+from rich.text import Text
+
+
+# Tool icons mapping
+TOOL_ICONS = {
+    "bash": "💻",
+    "edit_file": "📝",
+    "read_file": "📖",
+    "write_file": "📄",
+    "search": "🔍",
+    "glob": "🔎",
+    "grep": "🔎",
+    "final_answer": "✅",
+    "think": "💭",
+    "remember": "💾",
+}
 
 
 class TerminalUI:
@@ -14,6 +34,7 @@ class TerminalUI:
 
     def __init__(self):
         self.console = Console()
+        self._tool_start_time: float | None = None
 
     def print_welcome(self) -> None:
         """Print welcome message."""
@@ -21,7 +42,7 @@ class TerminalUI:
         self.console.print(
             Panel(
                 "[bold cyan]Xagent[/bold cyan] - A lightweight terminal Agent\n"
-                "[dim]Type your message or use /help for commands[/dim]",
+                "[dim]Type your message or /help for commands | ESC: stop | Ctrl+C: exit[/dim]",
                 border_style="cyan",
             )
         )
@@ -40,14 +61,48 @@ class TerminalUI:
             self.console.print(f"[yellow]Tool Result:[/yellow] {content[:200]}...")
 
     def print_tool_call(self, name: str, args: dict) -> None:
-        """Print a tool call."""
-        self.console.print(f"[magenta]Calling tool:[/magenta] {name}")
+        """Print a tool call (legacy, calls print_tool_start)."""
+        self.print_tool_start(name, args)
+
+    def print_tool_start(self, name: str, args: dict) -> None:
+        """Print tool execution start with icon and args preview."""
+        import sys
+        icon = TOOL_ICONS.get(name, "🔧")
+        self._tool_start_time = time.time()
+
+        # Use direct stdout for immediate display
+        sys.stdout.write("\n")
+        sys.stdout.flush()
+        self.console.print(f"[bold magenta]┌─ {icon} {name}[/bold magenta]")
+
         if args:
             for key, value in args.items():
-                display_value = str(value)[:100]
-                if len(str(value)) > 100:
-                    display_value += "..."
-                self.console.print(f"  [dim]{key}:[/dim] {display_value}")
+                display_value = str(value)
+                # Truncate long values
+                if len(display_value) > 80:
+                    display_value = display_value[:77] + "..."
+                # Escape any Rich markup in values
+                display_value = display_value.replace("[", "\\[")
+                self.console.print(f"[magenta]│[/magenta]  [dim]{key}:[/dim] {display_value}")
+
+        # Flush to ensure immediate display
+        sys.stdout.flush()
+
+    def print_tool_end(self, name: str, success: bool = True, message: str | None = None, elapsed: float | None = None) -> None:
+        """Print tool execution end with timing and status."""
+        if elapsed is None:
+            elapsed = time.time() - self._tool_start_time if self._tool_start_time else 0
+        self._tool_start_time = None
+
+        if success:
+            status = "[green]✓ done[/green]"
+        else:
+            status = "[red]✗ failed[/red]"
+
+        msg = f"[magenta]└─[/magenta] {status} [dim]({elapsed:.2f}s)[/dim]"
+        if message:
+            msg += f" [dim]{message}[/dim]"
+        self.console.print(msg)
 
     def print_error(self, message: str) -> None:
         """Print an error message."""
@@ -112,6 +167,22 @@ class TerminalUI:
             console=self.console,
             refresh_per_second=10,
         )
+
+    @contextmanager
+    def spinner(self, text: str = "Thinking...") -> Generator[Live, None, None]:
+        """Context manager for spinner display."""
+        with Live(
+            Spinner("dots", text=text, style="cyan"),
+            console=self.console,
+            refresh_per_second=10,
+            transient=True,
+        ) as live:
+            yield live
+
+    def print_interrupted(self) -> None:
+        """Print interruption message."""
+        self.console.print()
+        self.console.print("[yellow]⚠ Operation interrupted[/yellow]")
 
     def print_code(self, code: str, language: str = "python") -> None:
         """Print syntax-highlighted code."""

@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 200" width="800" height="200">
+  <defs>
+    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="800" height="200" fill="#f8f9fa"/>
+  
+  <!-- Step 1: Input -->
+  <g transform="translate(50, 50)">
+    <rect x="0" y="0" width="150" height="100" rx="8" fill="white" stroke="#667eea" stroke-width="2"/>
+    <text x="75" y="40" font-family="Arial, sans-serif" font-size="28" text-anchor="middle">💬</text>
+    <text x="75" y="70" font-family="Arial, sans-serif" font-size="14" font-weight="bold" text-anchor="middle" fill="#2d3748">User Input</text>
+    <text x="75" y="90" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#718096">Ask anything</text>
+  </g>
+  
+  <!-- Arrow -->
+  <path d="M 200 100 L 250 100" stroke="#cbd5e0" stroke-width="2" fill="none"/>
+  <polygon points="250,95 260,100 250,105" fill="#cbd5e0"/>
+  
+  <!-- Step 2: AI Processing -->
+  <g transform="translate(260, 50)">
+    <rect x="0" y="0" width="150" height="100" rx="8" fill="white" stroke="#48bb78" stroke-width="2"/>
+    <text x="75" y="40" font-family="Arial, sans-serif" font-size="28" text-anchor="middle">🤖</text>
+    <text x="75" y="70" font-family="Arial, sans-serif" font-size="14" font-weight="bold" text-anchor="middle" fill="#2d3748">AI Agent</text>
+    <text x="75" y="90" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#718096">Process &amp; Plan</text>
+  </g>
+  
+  <!-- Arrow -->
+  <path d="M 410 100 L 460 100" stroke="#cbd5e0" stroke-width="2" fill="none"/>
+  <polygon points="460,95 470,100 460,105" fill="#cbd5e0"/>
+  
+  <!-- Step 3: Tools -->
+  <g transform="translate(470, 50)">
+    <rect x="0" y="0" width="150" height="100" rx="8" fill="white" stroke="#ed8936" stroke-width="2"/>
+    <text x="75" y="40" font-family="Arial, sans-serif" font-size="28" text-anchor="middle">🛠️</text>
+    <text x="75" y="70" font-family="Arial, sans-serif" font-size="14" font-weight="bold" text-anchor="middle" fill="#2d3748">Execute Tools</text>
+    <text x="75" y="90" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#718096">Get results</text>
+  </g>
+  
+  <!-- Arrow -->
+  <path d="M 620 100 L 670 100" stroke="#cbd5e0" stroke-width="2" fill="none"/>
+  <polygon points="670,95 680,100 670,105" fill="#cbd5e0"/>
+  
+  <!-- Step 4: Output -->
+  <g transform="translate(680, 50)">
+    <rect x="0" y="0" width="100" height="100" rx="8" fill="white" stroke="#9f7aea" stroke-width="2"/>
+    <text x="50" y="40" font-family="Arial, sans-serif" font-size="28" text-anchor="middle">✨</text>
+    <text x="50" y="70" font-family="Arial, sans-serif" font-size="14" font-weight="bold" text-anchor="middle" fill="#2d3748">Result</text>
+  </g>
+</svg>

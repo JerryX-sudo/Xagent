@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 350" width="700" height="350">
+  <defs>
+    <style>
+      @keyframes blink {
+        0%, 49% { opacity: 1; }
+        50%, 100% { opacity: 0; }
+      }
+      .cursor { animation: blink 1s infinite; }
+    </style>
+  </defs>
+  
+  <!-- Terminal Window -->
+  <rect x="10" y="10" width="680" height="330" rx="8" fill="#1a202c"/>
+  
+  <!-- Terminal Header -->
+  <rect x="10" y="10" width="680" height="30" rx="8 8 0 0" fill="#2d3748"/>
+  
+  <!-- Terminal Buttons -->
+  <circle cx="30" cy="25" r="5" fill="#fc5c65"/>
+  <circle cx="50" cy="25" r="5" fill="#fed330"/>
+  <circle cx="70" cy="25" r="5" fill="#26de81"/>
+  
+  <!-- Terminal Title -->
+  <text x="350" y="30" font-family="Arial, sans-serif" font-size="12" text-anchor="middle" fill="#a0aec0">
+    xagent
+  </text>
+  
+  <!-- Terminal Content -->
+  <g transform="translate(30, 60)">
+    <!-- User prompt -->
+    <text y="20" font-family="monospace" font-size="13" fill="#48bb78">You:</text>
+    <text x="40" y="20" font-family="monospace" font-size="13" fill="#ffffff">
+      List all Python files in this directory
+    </text>
+    
+    <!-- Agent response -->
+    <text y="50" font-family="monospace" font-size="13" fill="#48bb78">Xagent:</text>
+    <text x="60" y="50" font-family="monospace" font-size="13" fill="#cbd5e0">
+      I'll help you find all Python files.
+    </text>
+    
+    <!-- Tool usage -->
+    <rect x="0" y="70" width="640" height="60" rx="4" fill="#2d3748"/>
+    <text x="10" y="90" font-family="monospace" font-size="12" fill="#fed330">
+      🛠️ Using tool: glob
+    </text>
+    <text x="20" y="110" font-family="monospace" font-size="11" fill="#718096">
+      pattern: "**/*.py"
+    </text>
+    
+    <!-- Results -->
+    <text y="160" font-family="monospace" font-size="13" fill="#48bb78">Found 5 Python files:</text>
+    
+    <text x="20" y="185" font-family="monospace" font-size="12" fill="#63b3ed">• cli.py</text>
+    <text x="20" y="205" font-family="monospace" font-size="12" fill="#63b3ed">• __init__.py</text>
+    <text x="20" y="225" font-family="monospace" font-size="12" fill="#63b3ed">• __main__.py</text>
+    <text x="20" y="245" font-family="monospace" font-size="12" fill="#63b3ed">• pyproject.toml</text>
+    <text x="20" y="265" font-family="monospace" font-size="12" fill="#63b3ed">• pytest.ini</text>
+    
+    <!-- Next prompt -->
+    <text y="295" font-family="monospace" font-size="13" fill="#48bb78">You:</text>
+    <rect x="40" y="282" width="8" height="16" fill="#48bb78" class="cursor"/>
+  </g>
+</svg>
