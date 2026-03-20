@@ -28,7 +28,7 @@
   <!-- Terminal Content -->
   <g transform="translate(30, 60)">
     <!-- User prompt -->
-    <text y="20" font-family="monospace" font-size="13" fill="#48bb78">You:</text>
+    <text x="0" y="20" font-family="monospace" font-size="13" fill="#48bb78">You:</text>
     <text x="40" y="20" font-family="monospace" font-size="13" fill="#ffffff">
       List all Python files in this directory
     </text>
@@ -58,7 +58,7 @@
     <text x="20" y="265" font-family="monospace" font-size="12" fill="#63b3ed">• pytest.ini</text>
     
     <!-- Next prompt -->
-    <text y="295" font-family="monospace" font-size="13" fill="#48bb78">You:</text>
-    <rect x="40" y="282" width="8" height="16" fill="#48bb78" class="cursor"/>
+    <text x="0" y="285" font-family="monospace" font-size="13" fill="#48bb78">You:</text>
+    <rect x="40" y="272" width="8" height="16" fill="#48bb78" class="cursor"/>
   </g>
 </svg>

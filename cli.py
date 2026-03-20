@@ -13,7 +13,7 @@ from core.bootstrap import bootstrap, get_env_config, test_connection, print_con
 from core.export import export_to_markdown
 from core.theme import Theme, get_theme, set_theme
 from utils.terminal import TerminalUI
-from utils.history import InputHistory, read_input_with_history
+from utils.history import InputHistory, read_input_with_history, KeyboardMonitor
 from utils.menu import MenuItem, show_menu, show_config_editor
 
 
@@ -409,6 +409,13 @@ def run_interactive():
     # Print welcome
     ui.print_welcome()
 
+    # Create keyboard monitor for interrupting during agent execution
+    def on_escape():
+        if agent.is_running():
+            agent.interrupt()
+
+    kb_monitor = KeyboardMonitor(on_escape)
+
     # Main loop
     while True:
         try:
@@ -433,15 +440,22 @@ def run_interactive():
                     break
                 continue
 
-            # Run agent
-            agent.run(user_input, stream=True)
+            # Run agent with keyboard monitoring
+            kb_monitor.start()
+            try:
+                agent.run(user_input, stream=True)
+            finally:
+                kb_monitor.stop()
+
+            # Show continuation hint if interrupted
+            if agent.was_interrupted():
+                ui.print_warning("Interrupted - type to continue or /clear to restart")
+                agent.clear_interrupt()
 
         except KeyboardInterrupt:
-            # ESC pressed - interrupt current operation
+            # ESC pressed during input - just show hint
             ui.console.print()
-            if agent.is_running():
-                agent.interrupt()
-            ui.print_warning("Interrupted (ESC)")
+            ui.print_warning("Interrupted - type to continue or /clear to restart")
         except EOFError:
             # Ctrl+C or Ctrl+D - exit program
             ui.console.print()

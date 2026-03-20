@@ -5,12 +5,94 @@ import sys
 import tty
 import termios
 import fcntl
+import threading
+import select
 from pathlib import Path
 from dataclasses import dataclass, field
 
 from rich.console import Console
 
 from core.config import Config
+
+
+class KeyboardMonitor:
+    """Monitor keyboard for ESC during agent execution."""
+
+    def __init__(self, on_escape: callable):
+        self._on_escape = on_escape
+        self._stop = threading.Event()
+        self._thread = None
+        self._original_settings = None
+
+    def start(self) -> None:
+        """Start monitoring keyboard in background."""
+        if self._thread and self._thread.is_alive():
+            return
+
+        self._stop.clear()
+        self._thread = threading.Thread(target=self._monitor, daemon=True)
+        self._thread.start()
+
+    def stop(self) -> None:
+        """Stop monitoring."""
+        self._stop.set()
+        if self._thread:
+            self._thread.join(timeout=0.2)
+
+    def _monitor(self) -> None:
+        """Monitor stdin for ESC key."""
+        fd = sys.stdin.fileno()
+
+        try:
+            # Save original settings
+            self._original_settings = termios.tcgetattr(fd)
+
+            # Set raw mode for single char reads
+            new_settings = termios.tcgetattr(fd)
+            new_settings[3] = new_settings[3] & ~termios.ICANON & ~termios.ECHO
+            termios.tcsetattr(fd, termios.TCSANOW, new_settings)
+
+            while not self._stop.is_set():
+                # Use select with timeout to check for input
+                rlist, _, _ = select.select([sys.stdin], [], [], 0.1)
+                if rlist:
+                    try:
+                        # Non-blocking read
+                        old_flags = fcntl.fcntl(fd, fcntl.F_GETFL)
+                        fcntl.fcntl(fd, fcntl.F_SETFL, old_flags | os.O_NONBLOCK)
+
+                        try:
+                            ch = sys.stdin.read(1)
+                            if ch == '\x1b':  # ESC
+                                # Check if it's standalone ESC or escape sequence
+                                try:
+                                    ch2 = sys.stdin.read(1)
+                                except (IOError, BlockingIOError):
+                                    ch2 = None
+
+                                if ch2 is None or ch2 == '':
+                                    # Standalone ESC - trigger callback
+                                    self._on_escape()
+                                    break
+                            elif ch == '\x03':  # Ctrl+C
+                                # Let Ctrl+C propagate for exit
+                                self._on_escape()
+                                break
+                        except (IOError, BlockingIOError):
+                            pass
+                        finally:
+                            fcntl.fcntl(fd, fcntl.F_SETFL, old_flags)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+        finally:
+            # Restore terminal settings
+            if self._original_settings:
+                try:
+                    termios.tcsetattr(fd, termios.TCSADRAIN, self._original_settings)
+                except Exception:
+                    pass
 
 
 @dataclass

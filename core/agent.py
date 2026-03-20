@@ -63,6 +63,14 @@ class Agent:
         """Check if the agent is currently running."""
         return self._running
 
+    def was_interrupted(self) -> bool:
+        """Check if last operation was interrupted."""
+        return self._interrupted
+
+    def clear_interrupt(self) -> None:
+        """Clear the interrupted flag."""
+        self._interrupted = False
+
     def _init_system_prompt(self) -> None:
         """Initialize system prompt with static memory."""
         prompt = SYSTEM_PROMPT
@@ -223,6 +231,7 @@ class Agent:
 
         Returns the final answer or None if no explicit final_answer was called.
         """
+        was_interrupted = self._interrupted
         self._interrupted = False
         self._running = True
 
@@ -277,7 +286,7 @@ class Agent:
             return None
         finally:
             self._running = False
-            self._interrupted = False
+            # Don't reset _interrupted here - let cli.py check it
 
     def _run_stream(self, messages: list[dict], tools: list[dict]) -> LLMResponse:
         """Run streaming LLM call."""
