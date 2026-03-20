@@ -1,0 +1,146 @@
+"""OpenAI-compatible LLM client."""
+
+from typing import Any, Generator
+
+from openai import OpenAI, APIError, APIConnectionError, AuthenticationError
+
+from llm.base import BaseLLM, LLMResponse
+
+
+class OpenAIClient(BaseLLM):
+    """OpenAI-compatible client (works with OpenAI, LiteLLM, etc.)."""
+
+    def __init__(self, config):
+        super().__init__(config)
+        self.client = OpenAI(
+            api_key=config.api_key,
+            base_url=config.base_url,
+        )
+
+    def chat(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None = None,
+    ) -> LLMResponse:
+        """Send a chat request and return the response."""
+        kwargs: dict[str, Any] = {
+            "model": self.config.model,
+            "messages": messages,
+            "max_tokens": self.config.max_tokens,
+            "temperature": self.config.temperature,
+        }
+
+        if tools:
+            kwargs["tools"] = tools
+            kwargs["tool_choice"] = "auto"
+
+        try:
+            response = self.client.chat.completions.create(**kwargs)
+        except (APIError, APIConnectionError) as e:
+            raise RuntimeError(f"API error: {e}") from e
+
+        message = response.choices[0].message
+
+        tool_calls = None
+        if message.tool_calls:
+            tool_calls = [
+                {
+                    "id": tc.id,
+                    "type": "function",
+                    "function": {
+                        "name": tc.function.name,
+                        "arguments": tc.function.arguments,
+                    },
+                }
+                for tc in message.tool_calls
+            ]
+
+        return LLMResponse(
+            content=message.content or "",
+            tool_calls=tool_calls,
+            finish_reason=response.choices[0].finish_reason or "stop",
+            usage={
+                "prompt_tokens": response.usage.prompt_tokens if response.usage else 0,
+                "completion_tokens": response.usage.completion_tokens if response.usage else 0,
+                "total_tokens": response.usage.total_tokens if response.usage else 0,
+            },
+        )
+
+    def chat_stream(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None = None,
+    ) -> Generator[str, None, LLMResponse]:
+        """Stream a chat response, yielding content chunks."""
+        kwargs: dict[str, Any] = {
+            "model": self.config.model,
+            "messages": messages,
+            "max_tokens": self.config.max_tokens,
+            "temperature": self.config.temperature,
+            "stream": True,
+        }
+
+        if tools:
+            kwargs["tools"] = tools
+            kwargs["tool_choice"] = "auto"
+
+        try:
+            stream = self.client.chat.completions.create(**kwargs)
+        except (APIError, APIConnectionError) as e:
+            raise RuntimeError(f"API error: {e}") from e
+
+        content_parts: list[str] = []
+        tool_calls_data: dict[int, dict[str, Any]] = {}
+        finish_reason = "stop"
+
+        for chunk in stream:
+            if not chunk.choices:
+                continue
+
+            delta = chunk.choices[0].delta
+
+            if delta.content:
+                content_parts.append(delta.content)
+                yield delta.content
+
+            if delta.tool_calls:
+                for tc in delta.tool_calls:
+                    idx = tc.index
+                    if idx not in tool_calls_data:
+                        tool_calls_data[idx] = {
+                            "id": tc.id or "",
+                            "type": "function",
+                            "function": {"name": "", "arguments": ""},
+                        }
+                    if tc.id:
+                        tool_calls_data[idx]["id"] = tc.id
+                    if tc.function:
+                        if tc.function.name:
+                            tool_calls_data[idx]["function"]["name"] = tc.function.name
+                        if tc.function.arguments:
+                            tool_calls_data[idx]["function"]["arguments"] += tc.function.arguments
+
+            if chunk.choices[0].finish_reason:
+                finish_reason = chunk.choices[0].finish_reason
+
+        tool_calls = None
+        if tool_calls_data:
+            tool_calls = [tool_calls_data[i] for i in sorted(tool_calls_data.keys())]
+
+        return LLMResponse(
+            content="".join(content_parts),
+            tool_calls=tool_calls,
+            finish_reason=finish_reason,
+        )
+
+    def validate_connection(self) -> tuple[bool, str]:
+        """Validate the API connection."""
+        try:
+            self.client.models.list()
+            return True, "Connection successful"
+        except AuthenticationError:
+            return False, "Invalid API key"
+        except APIConnectionError as e:
+            return False, f"Connection failed: {e}"
+        except Exception as e:
+            return False, f"Unexpected error: {e}"
