@@ -106,43 +106,43 @@ def bootstrap(console: Console) -> Config | None:
     Returns:
         Config if successful, None if user cancels
     """
-    max_retries = 3
+    config = None
+    from_env = False
 
-    for attempt in range(max_retries):
-        # Try environment variables first (only on first attempt)
-        if attempt == 0:
+    while True:
+        # First time: try environment variables
+        if config is None:
             config = get_env_config()
             if config.api_key:
                 console.print("[dim]Using configuration from environment variables[/dim]")
+                from_env = True
             else:
                 config = prompt_for_config(console)
-        else:
-            console.print()
-            console.print("[yellow]Let's try again...[/yellow]")
-            config = prompt_for_config(console)
+                from_env = False
 
         # Test connection
         success, msg = test_connection(config, console)
 
         if success:
-            console.print(f"[green]✓ Connection successful![/green]")
+            console.print("[green]✓ Connection successful![/green]")
             console.print()
             return config
         else:
             console.print(f"[red]✗ Connection failed: {msg}[/red]")
+            console.print()
 
-            if attempt < max_retries - 1:
-                console.print("[yellow]Please check your settings and try again.[/yellow]")
-            else:
-                console.print("[red]Maximum retries reached. Please check your configuration.[/red]")
-                console.print()
-                console.print("[dim]Tips:[/dim]")
-                console.print("  - Verify your API key is correct")
-                console.print("  - Check if base URL is accessible")
-                console.print("  - Ensure the model name is valid")
+            # Ask user what to do
+            choice = Prompt.ask(
+                "[yellow]What would you like to do?[/yellow]",
+                choices=["retry", "change", "quit"],
+                default="retry"
+            )
+
+            if choice == "quit":
                 return None
-
-    return None
+            elif choice == "change":
+                config = prompt_for_config(console)
+            # retry: loop again with same config
 
 
 def print_config_hint(console: Console) -> None:
