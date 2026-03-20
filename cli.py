@@ -92,6 +92,10 @@ def handle_config(agent: Agent) -> None:
 
     show_config_editor(config_items, "Configuration", console)
 
+    # Save config to disk
+    config.save()
+    ui.print_success("Configuration saved to ~/.xagent/config.yaml")
+
 
 def handle_memory_menu(agent: Agent) -> None:
     """Handle memory submenu."""

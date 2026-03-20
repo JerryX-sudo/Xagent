@@ -1,5 +1,7 @@
 """Human interaction tool for Xagent."""
 
+import sys
+import termios
 from typing import Any
 
 from rich.console import Console
@@ -41,23 +43,42 @@ class AskHumanTool(BaseTool):
         if not question:
             return "Error: No question provided"
 
-        self.console.print()
-        self.console.print(Panel(question, title="[bold cyan]Agent Question[/bold cyan]", border_style="cyan"))
+        # Restore terminal to normal mode for input
+        fd = sys.stdin.fileno()
+        try:
+            old_settings = termios.tcgetattr(fd)
+            # Reset to sane defaults (enable echo, canonical mode)
+            new_settings = termios.tcgetattr(fd)
+            new_settings[3] = new_settings[3] | termios.ECHO | termios.ICANON
+            termios.tcsetattr(fd, termios.TCSANOW, new_settings)
+        except termios.error:
+            old_settings = None
 
-        if options:
-            self.console.print("[dim]Suggested options:[/dim]")
-            for i, opt in enumerate(options, 1):
-                self.console.print(f"  [cyan]{i}.[/cyan] {opt}")
+        try:
             self.console.print()
+            self.console.print(Panel(question, title="[bold cyan]Agent Question[/bold cyan]", border_style="cyan"))
 
-            response = Prompt.ask("Your answer (number or custom text)")
+            if options:
+                self.console.print("[dim]Suggested options:[/dim]")
+                for i, opt in enumerate(options, 1):
+                    self.console.print(f"  [cyan]{i}.[/cyan] {opt}")
+                self.console.print()
 
-            if response.isdigit():
-                idx = int(response) - 1
-                if 0 <= idx < len(options):
-                    return options[idx]
+                response = Prompt.ask("Your answer (number or custom text)")
 
-            return response
-        else:
-            response = Prompt.ask("Your answer")
-            return response
+                if response.isdigit():
+                    idx = int(response) - 1
+                    if 0 <= idx < len(options):
+                        return options[idx]
+
+                return response
+            else:
+                response = Prompt.ask("Your answer")
+                return response
+        finally:
+            # Restore previous terminal settings
+            if old_settings:
+                try:
+                    termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+                except termios.error:
+                    pass
