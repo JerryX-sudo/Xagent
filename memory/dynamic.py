@@ -84,19 +84,21 @@ class DynamicMemory:
         lines = []
 
         if self._tasks:
-            pending = [t for t in self._tasks.values() if t.status == "pending"]
-            in_progress = [t for t in self._tasks.values() if t.status == "in_progress"]
-            completed = [t for t in self._tasks.values() if t.status == "completed"]
+            lines.append("## Current Plan")
+            for t in self._tasks.values():
+                if t.status == "completed":
+                    lines.append(f"  [✓] {t.id}: {t.description}")
+                elif t.status == "in_progress":
+                    lines.append(f"  [→] {t.id}: {t.description}")
+                elif t.status == "failed":
+                    lines.append(f"  [✗] {t.id}: {t.description}")
+                else:
+                    lines.append(f"  [ ] {t.id}: {t.description}")
 
-            lines.append("## Tasks")
-            if in_progress:
-                lines.append(f"- In Progress: {len(in_progress)}")
-                for t in in_progress:
-                    lines.append(f"  - {t.description}")
-            if pending:
-                lines.append(f"- Pending: {len(pending)}")
-            if completed:
-                lines.append(f"- Completed: {len(completed)}")
+            # Progress summary
+            total = len(self._tasks)
+            completed = len([t for t in self._tasks.values() if t.status == "completed"])
+            lines.append(f"\nProgress: {completed}/{total} tasks")
 
         if self._context:
             lines.append("\n## Context")

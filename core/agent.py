@@ -74,6 +74,26 @@ class Agent:
 
         self.session.add_message("system", prompt)
 
+    def _show_plan_progress(self) -> None:
+        """Show current plan progress if exists."""
+        tasks = self.dynamic_memory.list_tasks()
+        if not tasks:
+            return
+
+        self.ui.console.print()
+        self.ui.console.print("[dim]─── Plan Progress ───[/dim]")
+        for t in tasks:
+            if t.status == "completed":
+                self.ui.console.print(f"[green]  [✓] {t.description}[/green]")
+            elif t.status == "in_progress":
+                self.ui.console.print(f"[cyan]  [→] {t.description}[/cyan]")
+            else:
+                self.ui.console.print(f"[dim]  [ ] {t.description}[/dim]")
+        total = len(tasks)
+        completed = len([t for t in tasks if t.status == "completed"])
+        self.ui.console.print(f"[dim]  ({completed}/{total} completed)[/dim]")
+        self.ui.console.print()
+
     def _execute_tool_call(self, tool_call: dict[str, Any]) -> str:
         """Execute a single tool call and return the result."""
         func = tool_call.get("function", {})
@@ -89,6 +109,10 @@ class Agent:
         if self._interrupted:
             return "Operation interrupted by user"
 
+        # Show plan progress before execution (if plan exists and not a plan tool itself)
+        if name != "plan" and self.dynamic_memory.list_tasks():
+            self._show_plan_progress()
+
         self.ui.print_tool_start(name, args)
         start_time = time.time()
 
@@ -97,6 +121,11 @@ class Agent:
             elapsed = time.time() - start_time
             success = not result.startswith("Error:")
             self.ui.print_tool_end(name, success=success, elapsed=elapsed)
+
+            # Show updated progress after completing a plan task
+            if name == "plan" and args.get("action") == "complete":
+                self._show_plan_progress()
+
             return result
 
         except Exception as e:

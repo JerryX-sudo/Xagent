@@ -4,10 +4,20 @@ import urllib.request
 import urllib.parse
 import json
 import re
+import ssl
+import os
 from typing import Any
 from html.parser import HTMLParser
 
 from tools.base import BaseTool
+
+# Create a default SSL context that doesn't verify (for environments with proxy issues)
+try:
+    _ssl_context = ssl.create_default_context()
+    _ssl_context.check_hostname = False
+    _ssl_context.verify_mode = ssl.CERT_NONE
+except Exception:
+    _ssl_context = None
 
 
 class HTMLTextExtractor(HTMLParser):
@@ -76,7 +86,7 @@ class WebFetchTool(BaseTool):
                 }
             )
 
-            with urllib.request.urlopen(req, timeout=10) as response:
+            with urllib.request.urlopen(req, timeout=10, context=_ssl_context) as response:
                 content_type = response.headers.get('Content-Type', '')
                 encoding = 'utf-8'
 
@@ -109,10 +119,10 @@ class WebFetchTool(BaseTool):
 
 
 class WebSearchTool(BaseTool):
-    """Tool for web search (using DuckDuckGo)."""
+    """Tool for web search (using DuckDuckGo API)."""
 
     name = "web_search"
-    description = "Search the web using DuckDuckGo. Returns search results with titles and URLs."
+    description = "Search the web. Returns search results with titles, URLs and snippets."
     parameters = {
         "type": "object",
         "properties": {
@@ -136,40 +146,86 @@ class WebSearchTool(BaseTool):
         if not query:
             return "Error: query required"
 
+        # Try DuckDuckGo Instant Answer API first (faster, no HTML parsing)
+        result = self._search_ddg_api(query, max_results)
+        if result:
+            return result
+
+        # Fallback to HTML search
+        result = self._search_ddg_html(query, max_results)
+        if result:
+            return result
+
+        return f"Could not search for: {query}. Network may be unavailable."
+
+    def _search_ddg_api(self, query: str, max_results: int) -> str | None:
+        """Search using DuckDuckGo Instant Answer API."""
         try:
-            # Use DuckDuckGo HTML search
+            encoded_query = urllib.parse.quote(query)
+            url = f"https://api.duckduckgo.com/?q={encoded_query}&format=json&no_html=1"
+
+            req = urllib.request.Request(
+                url,
+                headers={
+                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+                }
+            )
+
+            with urllib.request.urlopen(req, timeout=15, context=_ssl_context) as response:
+                data = json.loads(response.read().decode('utf-8'))
+
+            results = []
+
+            # Abstract (main answer)
+            if data.get('Abstract'):
+                results.append(f"**{data.get('Heading', 'Answer')}**\n{data['Abstract']}\nSource: {data.get('AbstractURL', '')}")
+
+            # Related topics
+            for topic in data.get('RelatedTopics', [])[:max_results]:
+                if isinstance(topic, dict) and topic.get('Text'):
+                    text = topic['Text']
+                    url = topic.get('FirstURL', '')
+                    results.append(f"- {text}\n  {url}")
+
+            if results:
+                return f"Search results for '{query}':\n\n" + "\n\n".join(results)
+
+            return None
+
+        except Exception:
+            return None
+
+    def _search_ddg_html(self, query: str, max_results: int) -> str | None:
+        """Search using DuckDuckGo HTML (fallback)."""
+        try:
             encoded_query = urllib.parse.quote(query)
             url = f"https://html.duckduckgo.com/html/?q={encoded_query}"
 
             req = urllib.request.Request(
                 url,
                 headers={
-                    'User-Agent': 'Mozilla/5.0 (compatible; Xagent/1.0)',
+                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
                 }
             )
 
-            with urllib.request.urlopen(req, timeout=10) as response:
+            with urllib.request.urlopen(req, timeout=20, context=_ssl_context) as response:
                 content = response.read().decode('utf-8', errors='ignore')
 
-            # Parse results (simple regex extraction)
             results = []
-
-            # Find result links
             pattern = r'<a[^>]*class="result__a"[^>]*href="([^"]*)"[^>]*>([^<]*)</a>'
             matches = re.findall(pattern, content)
 
-            for url, title in matches[:max_results]:
-                # Clean up URL (DuckDuckGo wraps URLs)
-                if 'uddg=' in url:
-                    url = urllib.parse.unquote(url.split('uddg=')[-1].split('&')[0])
+            for result_url, title in matches[:max_results]:
+                if 'uddg=' in result_url:
+                    result_url = urllib.parse.unquote(result_url.split('uddg=')[-1].split('&')[0])
                 title = title.strip()
-                if title and url:
-                    results.append(f"- {title}\n  {url}")
+                if title and result_url:
+                    results.append(f"- {title}\n  {result_url}")
 
-            if not results:
-                return f"No results found for: {query}"
+            if results:
+                return f"Search results for '{query}':\n\n" + "\n\n".join(results)
 
-            return f"Search results for '{query}':\n\n" + "\n\n".join(results)
+            return None
 
-        except Exception as e:
-            return f"Error searching: {e}"
+        except Exception:
+            return None

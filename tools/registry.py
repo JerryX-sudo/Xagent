@@ -16,6 +16,7 @@ from tools.search import GlobTool, GrepTool, ListDirTool
 from tools.web import WebFetchTool, WebSearchTool
 from tools.git import GitTool, GitStatusTool, GitDiffTool, GitLogTool
 from tools.python_repl import PythonREPLTool
+from tools.plan import PlanTool
 from utils.output import OutputManager
 
 
@@ -60,6 +61,7 @@ class ToolRegistry:
         self.register(PythonREPLTool(self.permission_manager))
         if self.dynamic_memory:
             self.register(MemoryTool(self.dynamic_memory))
+            self.register(PlanTool(self.dynamic_memory))
 
     def register(self, tool: BaseTool) -> None:
         """Register a tool."""
