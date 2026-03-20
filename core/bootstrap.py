@@ -44,7 +44,6 @@ def prompt_for_config(console: Console) -> Config:
     while True:
         api_key = Prompt.ask(
             "[cyan]API Key[/cyan]",
-            password=True,
         )
         if api_key.strip():
             config.api_key = api_key.strip()
