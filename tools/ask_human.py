@@ -1,14 +1,19 @@
 """Human interaction tool for Xagent."""
 
-import sys
-import termios
+import os
+import time
 from typing import Any
 
 from rich.console import Console
-from rich.prompt import Prompt
 from rich.panel import Panel
 
 from tools.base import BaseTool
+
+# Import readline at module level for line editing support
+try:
+    import readline  # noqa: F401
+except ImportError:
+    pass
 
 
 class AskHumanTool(BaseTool):
@@ -43,16 +48,15 @@ class AskHumanTool(BaseTool):
         if not question:
             return "Error: No question provided"
 
-        # Restore terminal to normal mode for input
-        fd = sys.stdin.fileno()
-        try:
-            old_settings = termios.tcgetattr(fd)
-            # Reset to sane defaults (enable echo, canonical mode)
-            new_settings = termios.tcgetattr(fd)
-            new_settings[3] = new_settings[3] | termios.ECHO | termios.ICANON
-            termios.tcsetattr(fd, termios.TCSANOW, new_settings)
-        except termios.error:
-            old_settings = None
+        # Stop keyboard monitor FIRST before any output
+        from utils.history import KeyboardMonitor
+        monitor = KeyboardMonitor._instance
+        if monitor:
+            monitor.stop()
+            time.sleep(0.2)
+
+        # Force reset terminal to sane mode
+        os.system('stty sane 2>/dev/null')
 
         try:
             self.console.print()
@@ -64,7 +68,7 @@ class AskHumanTool(BaseTool):
                     self.console.print(f"  [cyan]{i}.[/cyan] {opt}")
                 self.console.print()
 
-                response = Prompt.ask("Your answer (number or custom text)")
+                response = input("Your answer (number or custom text): ").strip()
 
                 if response.isdigit():
                     idx = int(response) - 1
@@ -73,12 +77,8 @@ class AskHumanTool(BaseTool):
 
                 return response
             else:
-                response = Prompt.ask("Your answer")
-                return response
+                return input("Your answer: ").strip()
         finally:
-            # Restore previous terminal settings
-            if old_settings:
-                try:
-                    termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-                except termios.error:
-                    pass
+            # Restart monitor
+            if monitor:
+                monitor.start()

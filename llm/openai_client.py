@@ -12,9 +12,13 @@ class OpenAIClient(BaseLLM):
 
     def __init__(self, config):
         super().__init__(config)
+        # Ensure base_url has /v1 suffix for OpenAI SDK compatibility
+        base_url = config.base_url
+        if base_url and not base_url.rstrip('/').endswith('/v1'):
+            base_url = base_url.rstrip('/') + '/v1'
         self.client = OpenAI(
             api_key=config.api_key,
-            base_url=config.base_url,
+            base_url=base_url,
         )
 
     def chat(
@@ -141,7 +145,13 @@ class OpenAIClient(BaseLLM):
     def validate_connection(self) -> tuple[bool, str]:
         """Validate the API connection."""
         try:
-            self.client.models.list()
+            # Use chat request instead of models.list()
+            # Some proxies don't support the models endpoint
+            self.client.chat.completions.create(
+                model=self.config.model,
+                messages=[{"role": "user", "content": "hi"}],
+                max_tokens=1,
+            )
             return True, "Connection successful"
         except AuthenticationError:
             return False, "Invalid API key"

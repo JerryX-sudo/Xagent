@@ -18,11 +18,15 @@ from core.config import Config
 class KeyboardMonitor:
     """Monitor keyboard for ESC during agent execution."""
 
+    # Global instance for access from tools
+    _instance = None
+
     def __init__(self, on_escape: callable):
         self._on_escape = on_escape
         self._stop = threading.Event()
         self._thread = None
         self._original_settings = None
+        KeyboardMonitor._instance = self
 
     def start(self) -> None:
         """Start monitoring keyboard in background."""
@@ -34,10 +38,11 @@ class KeyboardMonitor:
         self._thread.start()
 
     def stop(self) -> None:
-        """Stop monitoring."""
+        """Stop monitoring and restore terminal."""
         self._stop.set()
         if self._thread:
-            self._thread.join(timeout=0.2)
+            self._thread.join(timeout=0.3)
+            self._thread = None
 
     def _monitor(self) -> None:
         """Monitor stdin for ESC key."""
