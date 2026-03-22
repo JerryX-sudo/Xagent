@@ -47,10 +47,12 @@ class KeyboardMonitor:
     def _monitor(self) -> None:
         """Monitor stdin for ESC key."""
         fd = sys.stdin.fileno()
+        old_flags = None
 
         try:
             # Save original settings
             self._original_settings = termios.tcgetattr(fd)
+            old_flags = fcntl.fcntl(fd, fcntl.F_GETFL)
 
             # Set raw mode for single char reads
             new_settings = termios.tcgetattr(fd)
@@ -62,8 +64,7 @@ class KeyboardMonitor:
                 rlist, _, _ = select.select([sys.stdin], [], [], 0.1)
                 if rlist:
                     try:
-                        # Non-blocking read
-                        old_flags = fcntl.fcntl(fd, fcntl.F_GETFL)
+                        # Temporarily set non-blocking for read
                         fcntl.fcntl(fd, fcntl.F_SETFL, old_flags | os.O_NONBLOCK)
 
                         try:
@@ -86,13 +87,19 @@ class KeyboardMonitor:
                         except (IOError, BlockingIOError):
                             pass
                         finally:
+                            # Immediately restore blocking mode
                             fcntl.fcntl(fd, fcntl.F_SETFL, old_flags)
                     except Exception:
                         pass
         except Exception:
             pass
         finally:
-            # Restore terminal settings
+            # Restore terminal settings and flags
+            if old_flags is not None:
+                try:
+                    fcntl.fcntl(fd, fcntl.F_SETFL, old_flags)
+                except Exception:
+                    pass
             if self._original_settings:
                 try:
                     termios.tcsetattr(fd, termios.TCSADRAIN, self._original_settings)
