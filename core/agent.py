@@ -117,10 +117,6 @@ class Agent:
         if self._interrupted:
             return "Operation interrupted by user"
 
-        # Show plan progress before execution (if plan exists and not a plan tool itself)
-        if name != "plan" and self.dynamic_memory.list_tasks():
-            self._show_plan_progress()
-
         self.ui.print_tool_start(name, args)
         start_time = time.time()
 
@@ -130,8 +126,8 @@ class Agent:
             success = not result.startswith("Error:")
             self.ui.print_tool_end(name, success=success, elapsed=elapsed)
 
-            # Show updated progress after completing a plan task
-            if name == "plan" and args.get("action") == "complete":
+            # Show progress after completing a plan task
+            if name == "plan" and args.get("action") in ("complete", "create"):
                 self._show_plan_progress()
 
             return result

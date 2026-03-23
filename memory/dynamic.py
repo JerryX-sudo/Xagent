@@ -38,8 +38,9 @@ class DynamicMemory:
         task_id: str,
         status: str | None = None,
         note: str | None = None,
+        description: str | None = None,
     ) -> Task | None:
-        """Update a task's status or add a note."""
+        """Update a task's status, description, or add a note."""
         task = self._tasks.get(task_id)
         if not task:
             return None
@@ -52,7 +53,17 @@ class DynamicMemory:
         if note:
             task.notes.append(note)
 
+        if description:
+            task.description = description
+
         return task
+
+    def remove_task(self, task_id: str) -> bool:
+        """Remove a task by ID. Returns True if removed, False if not found."""
+        if task_id in self._tasks:
+            del self._tasks[task_id]
+            return True
+        return False
 
     def get_task(self, task_id: str) -> Task | None:
         """Get a task by ID."""

@@ -10,14 +10,14 @@ class PlanTool(BaseTool):
     """Tool for creating and managing task plans."""
 
     name = "plan"
-    description = "Create a plan with multiple tasks. Use this to break down complex requests into steps."
+    description = "Create and manage task plans. Use this to break down complex requests into steps."
     parameters = {
         "type": "object",
         "properties": {
             "action": {
                 "type": "string",
-                "enum": ["create", "list", "complete", "update"],
-                "description": "Action to perform: create (new plan), list (show tasks), complete (mark task done), update (change task status)",
+                "enum": ["create", "list", "complete", "update", "add", "remove", "edit"],
+                "description": "Action: create (new plan), list (show tasks), complete (mark done), update (change status), add (add task), remove (delete task), edit (change description)",
             },
             "tasks": {
                 "type": "array",
@@ -26,12 +26,16 @@ class PlanTool(BaseTool):
             },
             "task_id": {
                 "type": "string",
-                "description": "Task ID to update (for 'complete' or 'update' action)",
+                "description": "Task ID to operate on (for complete/update/remove/edit)",
             },
             "status": {
                 "type": "string",
                 "enum": ["pending", "in_progress", "completed", "failed"],
                 "description": "New status (for 'update' action)",
+            },
+            "description": {
+                "type": "string",
+                "description": "Task description (for 'add' or 'edit' action)",
             },
             "note": {
                 "type": "string",
@@ -126,6 +130,39 @@ class PlanTool(BaseTool):
                 return f"Error: Task '{task_id}' not found"
 
             return f"Updated {task_id}: status={task.status}"
+
+        elif action == "add":
+            description = kwargs.get("description")
+            if not description:
+                return "Error: description required"
+
+            task = self.memory.add_task(description)
+            return f"Added task {task.id}: {description}"
+
+        elif action == "remove":
+            task_id = kwargs.get("task_id")
+            if not task_id:
+                return "Error: task_id required"
+
+            if self.memory.remove_task(task_id):
+                return f"Removed task {task_id}"
+            else:
+                return f"Error: Task '{task_id}' not found"
+
+        elif action == "edit":
+            task_id = kwargs.get("task_id")
+            description = kwargs.get("description")
+
+            if not task_id:
+                return "Error: task_id required"
+            if not description:
+                return "Error: description required"
+
+            task = self.memory.update_task(task_id, description=description)
+            if not task:
+                return f"Error: Task '{task_id}' not found"
+
+            return f"Updated {task_id}: {description}"
 
         else:
             return f"Error: Unknown action '{action}'"
