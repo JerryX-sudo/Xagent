@@ -2,17 +2,30 @@
 
 import os
 import sys
-import tty
-import termios
-import fcntl
 import threading
-import select
 from pathlib import Path
 from dataclasses import dataclass, field
 
 from rich.console import Console
 
 from core.config import Config
+from utils.compat import (
+    IS_WINDOWS,
+    get_terminal_settings,
+    set_terminal_settings,
+    set_cbreak_mode,
+    set_raw_mode,
+    select_stdin,
+    set_nonblocking,
+    restore_blocking,
+)
+
+if IS_WINDOWS:
+    import msvcrt
+else:
+    import tty
+    import termios
+    import fcntl
 
 
 class KeyboardMonitor:
@@ -46,55 +59,64 @@ class KeyboardMonitor:
 
     def _monitor(self) -> None:
         """Monitor stdin for ESC key."""
+        if IS_WINDOWS:
+            self._monitor_windows()
+        else:
+            self._monitor_unix()
+
+    def _monitor_windows(self) -> None:
+        """Windows-specific keyboard monitoring."""
+        while not self._stop.is_set():
+            if msvcrt.kbhit():
+                ch = msvcrt.getwch()
+                if ch == '\x1b':  # ESC
+                    self._on_escape()
+                    break
+                elif ch == '\x03':  # Ctrl+C
+                    self._on_escape()
+                    break
+            self._stop.wait(0.1)
+
+    def _monitor_unix(self) -> None:
+        """Unix-specific keyboard monitoring."""
         fd = sys.stdin.fileno()
         old_flags = None
 
         try:
-            # Save original settings
             self._original_settings = termios.tcgetattr(fd)
             old_flags = fcntl.fcntl(fd, fcntl.F_GETFL)
 
-            # Set raw mode for single char reads
+            # Set cbreak mode
             new_settings = termios.tcgetattr(fd)
             new_settings[3] = new_settings[3] & ~termios.ICANON & ~termios.ECHO
             termios.tcsetattr(fd, termios.TCSANOW, new_settings)
 
             while not self._stop.is_set():
-                # Use select with timeout to check for input
-                rlist, _, _ = select.select([sys.stdin], [], [], 0.1)
-                if rlist:
+                if select_stdin(0.1):
                     try:
-                        # Temporarily set non-blocking for read
                         fcntl.fcntl(fd, fcntl.F_SETFL, old_flags | os.O_NONBLOCK)
-
                         try:
                             ch = sys.stdin.read(1)
                             if ch == '\x1b':  # ESC
-                                # Check if it's standalone ESC or escape sequence
                                 try:
                                     ch2 = sys.stdin.read(1)
                                 except (IOError, BlockingIOError):
                                     ch2 = None
-
                                 if ch2 is None or ch2 == '':
-                                    # Standalone ESC - trigger callback
                                     self._on_escape()
                                     break
                             elif ch == '\x03':  # Ctrl+C
-                                # Let Ctrl+C propagate for exit
                                 self._on_escape()
                                 break
                         except (IOError, BlockingIOError):
                             pass
                         finally:
-                            # Immediately restore blocking mode
                             fcntl.fcntl(fd, fcntl.F_SETFL, old_flags)
                     except Exception:
                         pass
         except Exception:
             pass
         finally:
-            # Restore terminal settings and flags
             if old_flags is not None:
                 try:
                     fcntl.fcntl(fd, fcntl.F_SETFL, old_flags)
@@ -147,7 +169,6 @@ class InputHistory:
         command = command.strip()
         if not command:
             return
-        # Don't add duplicates of the last command
         if self._history and self._history[-1] == command:
             return
         self._history.append(command)
@@ -195,19 +216,100 @@ def read_input_with_history(
     history: InputHistory,
     console: Console | None = None,
 ) -> str:
-    """Read input with arrow key history navigation.
-
-    Args:
-        prompt: Prompt to display
-        history: InputHistory instance
-        console: Rich console
-
-    Returns:
-        User input string
-    """
+    """Read input with arrow key history navigation."""
     if console is None:
         console = Console()
 
+    if IS_WINDOWS:
+        return _read_input_windows(prompt, history, console)
+    else:
+        return _read_input_unix(prompt, history, console)
+
+
+def _read_input_windows(prompt: str, history: InputHistory, console: Console) -> str:
+    """Windows-specific input reading with history."""
+    current_input = ""
+    cursor_pos = 0
+    history.reset_position()
+
+    sys.stdout.write(prompt)
+    sys.stdout.flush()
+
+    while True:
+        ch = msvcrt.getwch()
+
+        if ch == '\r':  # Enter
+            sys.stdout.write('\n')
+            sys.stdout.flush()
+            break
+
+        elif ch == '\x03':  # Ctrl+C
+            sys.stdout.write('\n')
+            raise EOFError
+
+        elif ch == '\x08':  # Backspace
+            if cursor_pos > 0:
+                current_input = current_input[:cursor_pos-1] + current_input[cursor_pos:]
+                cursor_pos -= 1
+                _refresh_line_windows(prompt, current_input, cursor_pos)
+
+        elif ch == '\x00' or ch == '\xe0':  # Special key prefix
+            ch2 = msvcrt.getwch()
+            if ch2 == 'H':  # Up arrow
+                history.set_current(current_input)
+                prev = history.previous()
+                if prev is not None:
+                    current_input = prev
+                    cursor_pos = len(current_input)
+                    _refresh_line_windows(prompt, current_input, cursor_pos)
+            elif ch2 == 'P':  # Down arrow
+                next_cmd = history.next()
+                if next_cmd is not None:
+                    current_input = next_cmd
+                    cursor_pos = len(current_input)
+                    _refresh_line_windows(prompt, current_input, cursor_pos)
+            elif ch2 == 'M':  # Right arrow
+                if cursor_pos < len(current_input):
+                    cursor_pos += 1
+                    _refresh_line_windows(prompt, current_input, cursor_pos)
+            elif ch2 == 'K':  # Left arrow
+                if cursor_pos > 0:
+                    cursor_pos -= 1
+                    _refresh_line_windows(prompt, current_input, cursor_pos)
+            elif ch2 == 'S':  # Delete
+                if cursor_pos < len(current_input):
+                    current_input = current_input[:cursor_pos] + current_input[cursor_pos+1:]
+                    _refresh_line_windows(prompt, current_input, cursor_pos)
+            elif ch2 == 'G':  # Home
+                cursor_pos = 0
+                _refresh_line_windows(prompt, current_input, cursor_pos)
+            elif ch2 == 'O':  # End
+                cursor_pos = len(current_input)
+                _refresh_line_windows(prompt, current_input, cursor_pos)
+
+        elif ch == '\x1b':  # ESC
+            sys.stdout.write('\n')
+            raise KeyboardInterrupt
+
+        elif ch >= ' ':  # Printable
+            current_input = current_input[:cursor_pos] + ch + current_input[cursor_pos:]
+            cursor_pos += 1
+            _refresh_line_windows(prompt, current_input, cursor_pos)
+
+    return current_input
+
+
+def _refresh_line_windows(prompt: str, text: str, cursor_pos: int) -> None:
+    """Refresh the input line on Windows."""
+    sys.stdout.write('\r' + ' ' * (len(prompt) + len(text) + 5) + '\r')
+    sys.stdout.write(prompt + text)
+    if cursor_pos < len(text):
+        sys.stdout.write('\b' * (len(text) - cursor_pos))
+    sys.stdout.flush()
+
+
+def _read_input_unix(prompt: str, history: InputHistory, console: Console) -> str:
+    """Unix-specific input reading with history."""
     fd = sys.stdin.fileno()
     old_settings = termios.tcgetattr(fd)
 
@@ -215,42 +317,32 @@ def read_input_with_history(
     cursor_pos = 0
     history.reset_position()
 
-    # Track number of display lines used
     last_num_lines = [1]
 
     def get_display_width(s: str) -> int:
-        """Get display width of string (CJK chars = 2 width)."""
         width = 0
         for c in s:
             if ord(c) > 127:
-                width += 2  # CJK and other wide chars
+                width += 2
             else:
                 width += 1
         return width
 
     def refresh_line():
-        """Redraw the current line."""
         import shutil
         term_width = shutil.get_terminal_size().columns
 
-        # Clear previous lines if we used multiple
         if last_num_lines[0] > 1:
             for _ in range(last_num_lines[0] - 1):
-                sys.stdout.write('\033[A')  # Move up
-                sys.stdout.write('\033[2K')  # Clear line
+                sys.stdout.write('\033[A\033[2K')
 
-        # Clear current line and go to start
         sys.stdout.write('\r\033[2K')
-
-        # Write prompt and input
         sys.stdout.write(prompt)
         sys.stdout.write(current_input)
 
-        # Calculate lines used now
         total_width = len(prompt) + get_display_width(current_input)
         last_num_lines[0] = max(1, (total_width + term_width - 1) // term_width)
 
-        # Move cursor to position
         if cursor_pos < len(current_input):
             after_cursor = current_input[cursor_pos:]
             move_back = get_display_width(after_cursor)
@@ -266,29 +358,27 @@ def read_input_with_history(
         while True:
             ch = sys.stdin.read(1)
 
-            if ch == '\r' or ch == '\n':  # Enter
+            if ch == '\r' or ch == '\n':
                 sys.stdout.write('\n')
                 sys.stdout.flush()
                 break
 
-            elif ch == '\x03':  # Ctrl+C - exit program
+            elif ch == '\x03':
                 sys.stdout.write('\n')
-                raise EOFError  # Signal to exit program
+                raise EOFError
 
-            elif ch == '\x04':  # Ctrl+D
+            elif ch == '\x04':
                 if not current_input:
                     raise EOFError
                 continue
 
-            elif ch == '\x7f' or ch == '\x08':  # Backspace
+            elif ch == '\x7f' or ch == '\x08':
                 if cursor_pos > 0:
                     current_input = current_input[:cursor_pos-1] + current_input[cursor_pos:]
                     cursor_pos -= 1
                     refresh_line()
 
-            elif ch == '\x1b':  # ESC sequence
-                # Try to read next char with non-blocking mode
-                fd = sys.stdin.fileno()
+            elif ch == '\x1b':
                 old_flags = fcntl.fcntl(fd, fcntl.F_GETFL)
                 fcntl.fcntl(fd, fcntl.F_SETFL, old_flags | os.O_NONBLOCK)
 
@@ -300,75 +390,72 @@ def read_input_with_history(
                     fcntl.fcntl(fd, fcntl.F_SETFL, old_flags)
 
                 if ch2 is None or ch2 == '':
-                    # Just ESC pressed alone - interrupt operation
                     sys.stdout.write('\n')
                     raise KeyboardInterrupt
 
-                # It's an escape sequence, continue processing
                 if ch2 == '[':
                     ch3 = sys.stdin.read(1)
-                    if ch3 == 'A':  # Up arrow
+                    if ch3 == 'A':
                         history.set_current(current_input)
                         prev = history.previous()
                         if prev is not None:
                             current_input = prev
                             cursor_pos = len(current_input)
                             refresh_line()
-                    elif ch3 == 'B':  # Down arrow
+                    elif ch3 == 'B':
                         next_cmd = history.next()
                         if next_cmd is not None:
                             current_input = next_cmd
                             cursor_pos = len(current_input)
                             refresh_line()
-                    elif ch3 == 'C':  # Right arrow
+                    elif ch3 == 'C':
                         if cursor_pos < len(current_input):
                             cursor_pos += 1
                             refresh_line()
-                    elif ch3 == 'D':  # Left arrow
+                    elif ch3 == 'D':
                         if cursor_pos > 0:
                             cursor_pos -= 1
                             refresh_line()
-                    elif ch3 == '3':  # Delete key (followed by ~)
-                        sys.stdin.read(1)  # consume ~
+                    elif ch3 == '3':
+                        sys.stdin.read(1)
                         if cursor_pos < len(current_input):
                             current_input = current_input[:cursor_pos] + current_input[cursor_pos+1:]
                             refresh_line()
-                    elif ch3 == 'H':  # Home
+                    elif ch3 == 'H':
                         cursor_pos = 0
                         refresh_line()
-                    elif ch3 == 'F':  # End
+                    elif ch3 == 'F':
                         cursor_pos = len(current_input)
                         refresh_line()
-                elif ch2 == 'O':  # Alternative arrow key format (some terminals)
+                elif ch2 == 'O':
                     ch3 = sys.stdin.read(1)
-                    if ch3 == 'C':  # Right
+                    if ch3 == 'C':
                         if cursor_pos < len(current_input):
                             cursor_pos += 1
                             refresh_line()
-                    elif ch3 == 'D':  # Left
+                    elif ch3 == 'D':
                         if cursor_pos > 0:
                             cursor_pos -= 1
                             refresh_line()
 
-            elif ch == '\x01':  # Ctrl+A (home)
+            elif ch == '\x01':
                 cursor_pos = 0
                 refresh_line()
 
-            elif ch == '\x05':  # Ctrl+E (end)
+            elif ch == '\x05':
                 cursor_pos = len(current_input)
                 refresh_line()
 
-            elif ch == '\x0b':  # Ctrl+K (kill to end)
+            elif ch == '\x0b':
                 current_input = current_input[:cursor_pos]
                 refresh_line()
 
-            elif ch == '\x15':  # Ctrl+U (kill to start)
+            elif ch == '\x15':
                 current_input = current_input[cursor_pos:]
                 cursor_pos = 0
                 refresh_line()
 
-            elif ch == '\x17':  # Ctrl+W (delete word)
-                # Find word boundary
+            elif ch == '\x17':
                 pos = cursor_pos
                 while pos > 0 and current_input[pos-1] == ' ':
                     pos -= 1
@@ -378,7 +465,7 @@ def read_input_with_history(
                 cursor_pos = pos
                 refresh_line()
 
-            elif ch >= ' ':  # Printable characters (including Unicode/Chinese)
+            elif ch >= ' ':
                 current_input = current_input[:cursor_pos] + ch + current_input[cursor_pos:]
                 cursor_pos += 1
                 refresh_line()

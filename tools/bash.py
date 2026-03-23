@@ -2,8 +2,8 @@
 
 import subprocess
 import shlex
-import select
 import signal
+import sys
 import time
 import threading
 from typing import Any
@@ -18,6 +18,10 @@ from rich.text import Text
 from tools.base import BaseTool
 from core.permission import PermissionManager
 from utils.output import OutputManager
+from utils.compat import IS_WINDOWS
+
+if not IS_WINDOWS:
+    import select
 
 
 class BashTool(BaseTool):
@@ -154,49 +158,11 @@ class BashTool(BaseTool):
             self.console.print(f"[dim]┌─ 💻 [bold]bash:[/bold] {cmd_display}[/dim]")
             self.console.print("[dim]│[/dim]")
 
-            # Read output in real-time using select
-            stdout_fd = self._current_process.stdout.fileno()
-            stderr_fd = self._current_process.stderr.fileno()
-
-            while True:
-                # Check for interrupt
-                if self._interrupted:
-                    self._current_process.terminate()
-                    self._current_process.wait(timeout=1)
-                    self.console.print("[dim]│[/dim] [yellow]⚠ Interrupted by user[/yellow]")
-                    break
-
-                # Check if process has finished
-                if self._current_process.poll() is not None:
-                    # Read any remaining output
-                    remaining_stdout = self._current_process.stdout.read()
-                    remaining_stderr = self._current_process.stderr.read()
-                    if remaining_stdout:
-                        for line in remaining_stdout.splitlines():
-                            output_lines.append(line)
-                            self.console.print(f"[dim]│[/dim] {line}")
-                    if remaining_stderr:
-                        for line in remaining_stderr.splitlines():
-                            stderr_lines.append(line)
-                            self.console.print(f"[dim]│[/dim] [red]{line}[/red]")
-                    break
-
-                # Use select for non-blocking read
-                ready, _, _ = select.select([stdout_fd, stderr_fd], [], [], 0.1)
-
-                for fd in ready:
-                    if fd == stdout_fd:
-                        line = self._current_process.stdout.readline()
-                        if line:
-                            line = line.rstrip('\n')
-                            output_lines.append(line)
-                            self.console.print(f"[dim]│[/dim] {line}")
-                    elif fd == stderr_fd:
-                        line = self._current_process.stderr.readline()
-                        if line:
-                            line = line.rstrip('\n')
-                            stderr_lines.append(line)
-                            self.console.print(f"[dim]│[/dim] [red]{line}[/red]")
+            # Read output in real-time
+            if IS_WINDOWS:
+                self._read_output_windows(output_lines, stderr_lines)
+            else:
+                self._read_output_unix(output_lines, stderr_lines)
 
             returncode = self._current_process.returncode or 0
             elapsed = time.time() - start_time
@@ -236,3 +202,100 @@ class BashTool(BaseTool):
             return f"Error executing command: {e}"
         finally:
             self._current_process = None
+
+    def _read_output_windows(self, output_lines: list, stderr_lines: list) -> None:
+        """Windows-specific output reading using threads."""
+        import queue
+
+        stdout_queue = queue.Queue()
+        stderr_queue = queue.Queue()
+
+        def read_stdout():
+            for line in iter(self._current_process.stdout.readline, ''):
+                stdout_queue.put(line.rstrip('\n'))
+            stdout_queue.put(None)
+
+        def read_stderr():
+            for line in iter(self._current_process.stderr.readline, ''):
+                stderr_queue.put(line.rstrip('\n'))
+            stderr_queue.put(None)
+
+        stdout_thread = threading.Thread(target=read_stdout, daemon=True)
+        stderr_thread = threading.Thread(target=read_stderr, daemon=True)
+        stdout_thread.start()
+        stderr_thread.start()
+
+        stdout_done = stderr_done = False
+
+        while not (stdout_done and stderr_done):
+            if self._interrupted:
+                self._current_process.terminate()
+                self._current_process.wait(timeout=1)
+                self.console.print("[dim]|[/dim] [yellow]Interrupted by user[/yellow]")
+                break
+
+            try:
+                line = stdout_queue.get_nowait()
+                if line is None:
+                    stdout_done = True
+                else:
+                    output_lines.append(line)
+                    self.console.print(f"[dim]|[/dim] {line}")
+            except queue.Empty:
+                pass
+
+            try:
+                line = stderr_queue.get_nowait()
+                if line is None:
+                    stderr_done = True
+                else:
+                    stderr_lines.append(line)
+                    self.console.print(f"[dim]|[/dim] [red]{line}[/red]")
+            except queue.Empty:
+                pass
+
+            if not stdout_done or not stderr_done:
+                time.sleep(0.01)
+
+        self._current_process.wait()
+
+    def _read_output_unix(self, output_lines: list, stderr_lines: list) -> None:
+        """Unix-specific output reading using select."""
+        stdout_fd = self._current_process.stdout.fileno()
+        stderr_fd = self._current_process.stderr.fileno()
+
+        while True:
+            if self._interrupted:
+                self._current_process.terminate()
+                self._current_process.wait(timeout=1)
+                self.console.print("[dim]|[/dim] [yellow]Interrupted by user[/yellow]")
+                break
+
+            if self._current_process.poll() is not None:
+                remaining_stdout = self._current_process.stdout.read()
+                remaining_stderr = self._current_process.stderr.read()
+                if remaining_stdout:
+                    for line in remaining_stdout.splitlines():
+                        output_lines.append(line)
+                        self.console.print(f"[dim]|[/dim] {line}")
+                if remaining_stderr:
+                    for line in remaining_stderr.splitlines():
+                        stderr_lines.append(line)
+                        self.console.print(f"[dim]|[/dim] [red]{line}[/red]")
+                break
+
+            ready, _, _ = select.select([stdout_fd, stderr_fd], [], [], 0.1)
+
+            for fd in ready:
+                if fd == stdout_fd:
+                    line = self._current_process.stdout.readline()
+                    if line:
+                        line = line.rstrip('\n')
+                        output_lines.append(line)
+                        self.console.print(f"[dim]|[/dim] {line}")
+                elif fd == stderr_fd:
+                    line = self._current_process.stderr.readline()
+                    if line:
+                        line = line.rstrip('\n')
+                        stderr_lines.append(line)
+                        self.console.print(f"[dim]|[/dim] [red]{line}[/red]")

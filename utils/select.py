@@ -2,15 +2,18 @@
 
 import os
 import sys
-import tty
-import termios
-import fcntl
 from dataclasses import dataclass
-from typing import Callable
 
 from rich.console import Console
-from rich.text import Text
-from rich.panel import Panel
+
+from utils.compat import IS_WINDOWS
+
+if IS_WINDOWS:
+    import msvcrt
+else:
+    import tty
+    import termios
+    import fcntl
 
 
 @dataclass
@@ -24,13 +27,38 @@ class SelectOption:
 
 def read_key() -> str:
     """Read a single keypress."""
+    if IS_WINDOWS:
+        return _read_key_windows()
+    else:
+        return _read_key_unix()
+
+
+def _read_key_windows() -> str:
+    """Windows-specific key reading."""
+    ch = msvcrt.getwch()
+    if ch == '\x00' or ch == '\xe0':  # Special key prefix
+        ch2 = msvcrt.getwch()
+        if ch2 == 'H':
+            return 'up'
+        elif ch2 == 'P':
+            return 'down'
+        elif ch2 == 'K':
+            return 'left'
+        elif ch2 == 'M':
+            return 'right'
+    elif ch == '\x1b':
+        return 'esc'
+    return ch
+
+
+def _read_key_unix() -> str:
+    """Unix-specific key reading."""
     fd = sys.stdin.fileno()
     old_settings = termios.tcgetattr(fd)
     try:
         tty.setraw(fd)
         ch = sys.stdin.read(1)
         if ch == '\x1b':  # Escape sequence
-            # Check if more chars available
             old_flags = fcntl.fcntl(fd, fcntl.F_GETFL)
             fcntl.fcntl(fd, fcntl.F_SETFL, old_flags | os.O_NONBLOCK)
             try:
@@ -58,16 +86,7 @@ def select_option(
     title: str = "Select an option",
     console: Console | None = None,
 ) -> SelectOption | None:
-    """Interactive selection with arrow keys.
-
-    Args:
-        options: List of options to choose from
-        title: Title to display
-        console: Rich console instance
-
-    Returns:
-        Selected option or None if cancelled
-    """
+    """Interactive selection with arrow keys."""
     if console is None:
         console = Console()
 
@@ -76,29 +95,27 @@ def select_option(
 
     def render():
         """Render the selection menu."""
-        # Move cursor up to redraw (clear previous render)
-        sys.stdout.write(f'\033[{num_options + 2}A')  # Move up
-        sys.stdout.write('\033[J')  # Clear from cursor to end
+        sys.stdout.write(f'\033[{num_options + 2}A')
+        sys.stdout.write('\033[J')
         sys.stdout.flush()
 
         console.print(f"[bold yellow]{title}[/bold yellow]")
         for i, opt in enumerate(options):
             if i == selected_idx:
-                console.print(f"  [bold cyan]› {opt.label}[/bold cyan] [dim]- {opt.description}[/dim]")
+                console.print(f"  [bold cyan]> {opt.label}[/bold cyan] [dim]- {opt.description}[/dim]")
             else:
                 console.print(f"    {opt.label} [dim]- {opt.description}[/dim]")
-        console.print("  [dim]↑↓ select | Enter confirm | Esc cancel[/dim]")
+        console.print("  [dim]Up/Down select | Enter confirm | Esc cancel[/dim]")
 
     # Initial render
     console.print(f"[bold yellow]{title}[/bold yellow]")
     for i, opt in enumerate(options):
         if i == selected_idx:
-            console.print(f"  [bold cyan]› {opt.label}[/bold cyan] [dim]- {opt.description}[/dim]")
+            console.print(f"  [bold cyan]> {opt.label}[/bold cyan] [dim]- {opt.description}[/dim]")
         else:
             console.print(f"    {opt.label} [dim]- {opt.description}[/dim]")
-    console.print("  [dim]↑↓ select | Enter confirm | Esc cancel[/dim]")
+    console.print("  [dim]Up/Down select | Enter confirm | Esc cancel[/dim]")
 
-    # Wait for key
     while True:
         key = read_key()
 
@@ -111,14 +128,13 @@ def select_option(
         elif key == 'down':
             selected_idx = (selected_idx + 1) % num_options
             render()
-        elif key == '\r' or key == '\n':  # Enter
-            console.print(f"[cyan]→ {options[selected_idx].label}[/cyan]")
+        elif key == '\r' or key == '\n':
+            console.print(f"[cyan]-> {options[selected_idx].label}[/cyan]")
             return options[selected_idx]
         else:
-            # Check shortcuts
             for i, opt in enumerate(options):
                 if opt.shortcut and opt.shortcut.lower() == key.lower():
-                    console.print(f"[cyan]→ {opt.label}[/cyan]")
+                    console.print(f"[cyan]-> {opt.label}[/cyan]")
                     return opt
 
     return None
@@ -129,16 +145,7 @@ def confirm(
     default: bool = False,
     console: Console | None = None,
 ) -> bool:
-    """Quick yes/no confirmation.
-
-    Args:
-        message: Question to ask
-        default: Default value if Enter pressed
-        console: Rich console instance
-
-    Returns:
-        True if confirmed, False otherwise
-    """
+    """Quick yes/no confirmation."""
     if console is None:
         console = Console()
 

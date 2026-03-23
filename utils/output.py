@@ -1,8 +1,6 @@
 """Collapsible output display for Xagent."""
 
 import sys
-import tty
-import termios
 import time
 from dataclasses import dataclass, field
 from typing import Callable
@@ -12,6 +10,12 @@ from rich.text import Text
 from rich.panel import Panel
 from rich.live import Live
 from rich.syntax import Syntax
+
+from utils.compat import IS_WINDOWS
+
+if not IS_WINDOWS:
+    import tty
+    import termios
 
 
 # Tool icons for display
@@ -189,12 +193,44 @@ class OutputManager:
             text.append("[Enter] continue", style="dim")
             return text
 
-        # Non-blocking check for input
-        import select as sel
-
         self.console.print(render_all())
 
-        # Quick check for user input (non-blocking)
+        if IS_WINDOWS:
+            self._interactive_loop_windows(render_all, timeout)
+        else:
+            self._interactive_loop_unix(render_all, timeout)
+
+    def _interactive_loop_windows(self, render_all, timeout: float) -> None:
+        """Windows interactive loop for output display."""
+        import msvcrt
+        import time as t
+
+        start = t.time()
+        while t.time() - start < timeout:
+            if msvcrt.kbhit():
+                ch = msvcrt.getwch()
+                if ch == '\r' or ch == '\n':
+                    break
+                elif ch == 'o':
+                    all_expanded = all(o.expanded for o in self.outputs)
+                    for o in self.outputs:
+                        o.expanded = not all_expanded
+                    self.console.clear()
+                    self.console.print(render_all())
+                elif ch.isdigit():
+                    idx = int(ch) - 1
+                    if 0 <= idx < len(self.outputs):
+                        self.outputs[idx].expanded = not self.outputs[idx].expanded
+                        self.console.clear()
+                        self.console.print(render_all())
+                elif ch == '\x1b' or ch == 'q':
+                    break
+            t.sleep(0.05)
+
+    def _interactive_loop_unix(self, render_all, timeout: float) -> None:
+        """Unix interactive loop for output display."""
+        import select as sel
+
         fd = sys.stdin.fileno()
         old_settings = termios.tcgetattr(fd)
 
@@ -202,17 +238,15 @@ class OutputManager:
             tty.setraw(fd)
 
             while True:
-                # Check if input available (with timeout)
                 ready, _, _ = sel.select([sys.stdin], [], [], timeout)
                 if not ready:
-                    break  # No input, continue
+                    break
 
                 ch = sys.stdin.read(1)
 
                 if ch == '\r' or ch == '\n':
                     break
                 elif ch == 'o':
-                    # Toggle all
                     all_expanded = all(o.expanded for o in self.outputs)
                     for o in self.outputs:
                         o.expanded = not all_expanded
