@@ -3,9 +3,12 @@
 import os
 import sys
 import subprocess
+from datetime import datetime
 
 import click
 from rich.console import Console
+from rich.panel import Panel
+from rich.text import Text
 
 from core import Config, Session, SkillRegistry
 from core.agent import Agent
@@ -25,6 +28,7 @@ ui = TerminalUI()
 COMMANDS = [
     MenuItem("help", "Show help message"),
     MenuItem("clear", "Clear conversation history"),
+    MenuItem("resume", "Resume a recent session"),
     MenuItem("config", "Edit configuration (model, max_iterations, etc.)"),
     MenuItem("memory", "Manage static memory"),
     MenuItem("history", "Show conversation history"),
@@ -126,6 +130,96 @@ def handle_memory_menu(agent: Agent) -> None:
             ui.print_success("Memory cleared")
 
 
+def handle_resume(agent: Agent) -> bool:
+    """Handle /resume command. Returns True if session was resumed."""
+    sessions = Session.list_resumable_sessions()
+
+    if not sessions:
+        ui.console.print("[dim]No recent sessions to resume[/dim]")
+        return False
+
+    # Build menu items
+    items = []
+    for i, s in enumerate(sessions):
+        # Format time
+        try:
+            updated = datetime.fromisoformat(s["updated_at"])
+            time_str = updated.strftime("%m/%d %H:%M")
+        except (ValueError, KeyError):
+            time_str = "unknown"
+
+        title = s["title"] or "(no title)"
+        if len(title) > 40:
+            title = title[:37] + "..."
+
+        items.append(MenuItem(
+            s["session_id"],
+            f"{title} ({s['message_count']} msgs, {time_str})",
+        ))
+
+    ui.console.print("[cyan]Recent sessions (expires after 7 days):[/cyan]")
+    result = show_menu(items, "Resume Session", console)
+
+    if result:
+        try:
+            loaded = Session.load(result.name, auto=True)
+            # Transfer to agent
+            agent.session = loaded
+            ui.print_success(f"Resumed session: {loaded.title or loaded.session_id}")
+            ui.console.print()
+
+            # Replay full conversation history
+            _print_conversation_history(loaded.messages)
+
+            return True
+        except FileNotFoundError:
+            ui.print_error("Session not found")
+            return False
+
+    return False
+
+
+def _print_conversation_history(messages: list) -> None:
+    """Print conversation history in a nice format."""
+    console.print()
+    console.print(Panel.fit(
+        "[bold]Conversation History[/bold]",
+        border_style="dim cyan",
+    ))
+    console.print()
+
+    for msg in messages:
+        if msg.role == "system":
+            continue
+        elif msg.role == "user":
+            # User message with bubble style
+            text = Text()
+            text.append("  ▶ ", style="bold green")
+            text.append(msg.content, style="white")
+            console.print(text)
+            console.print()
+        elif msg.role == "assistant":
+            if msg.content:
+                # Agent message with different style
+                text = Text()
+                text.append("  ◀ ", style="bold cyan")
+                text.append(msg.content, style="dim white")
+                console.print(text)
+                console.print()
+        elif msg.role == "tool":
+            # Tool result - compact inline
+            tool_name = msg.name or "tool"
+            preview = msg.content[:80] + "..." if len(msg.content) > 80 else msg.content
+            preview = preview.replace("\n", " ")
+            console.print(f"    [dim]⚙ {tool_name} → {preview}[/dim]")
+
+    console.print(Panel.fit(
+        "[dim]Continue the conversation below[/dim]",
+        border_style="dim cyan",
+    ))
+    console.print()
+
+
 def handle_command(cmd: str, agent: Agent, skills: SkillRegistry) -> bool:
     """Handle slash commands. Returns True if should continue, False to exit."""
     parts = cmd.strip().split(maxsplit=2)
@@ -157,6 +251,9 @@ def handle_command(cmd: str, agent: Agent, skills: SkillRegistry) -> bool:
         agent.session.clear()
         agent._init_system_prompt()
         ui.print_success("Conversation cleared")
+
+    elif command == "/resume":
+        handle_resume(agent)
 
     elif command == "/history":
         for msg in agent.session.messages:
@@ -423,7 +520,7 @@ def run_interactive():
     # Main loop
     while True:
         try:
-            user_input = read_input_with_history("You: ", history, ui.console)
+            user_input = read_input_with_history("  ▶ ", history, ui.console)
 
             if not user_input.strip():
                 continue
@@ -451,6 +548,13 @@ def run_interactive():
             finally:
                 kb_monitor.stop()
 
+            # Auto-save session after each interaction
+            if len(agent.session.messages) > 1:  # Has more than just system prompt
+                try:
+                    agent.session.save(auto=True)
+                except Exception:
+                    pass  # Silent fail for auto-save
+
             # Show continuation hint if interrupted
             if agent.was_interrupted():
                 ui.print_warning("Interrupted - type to continue or /clear to restart")
@@ -467,6 +571,13 @@ def run_interactive():
             break
         except Exception as e:
             ui.print_error(str(e))
+
+    # Final auto-save before exit
+    if len(agent.session.messages) > 1:
+        try:
+            agent.session.save(auto=True)
+        except Exception:
+            pass
 
     # Cleanup
     agent.cache.close()

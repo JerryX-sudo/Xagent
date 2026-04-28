@@ -63,3 +63,19 @@ DYNAMIC_MEMORY_TEMPLATE = """
 
 ---
 """
+
+MEMORY_CONSOLIDATION_PROMPT = """Based on the recent interaction, extract any information worth remembering long-term.
+
+Recent context:
+{recent_context}
+
+Trigger event: {trigger_event}
+
+Respond in JSON format:
+- If there's something worth saving: {{"save": true, "type": "user|feedback|project", "content": "what to remember"}}
+- If nothing worth saving: {{"save": false}}
+
+Only save non-obvious information that would help in future sessions. Don't save:
+- Temporary task states
+- Information already in code/git
+- Generic facts"""

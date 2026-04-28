@@ -3,6 +3,25 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
+from enum import Enum
+
+
+class ConsolidationTrigger(Enum):
+    """Events that can trigger memory consolidation."""
+    ASK_HUMAN_RESPONSE = "ask_human_response"
+    TASK_COMPLETED = "task_completed"
+    BEFORE_FINAL_ANSWER = "before_final_answer"
+    TOKEN_THRESHOLD = "token_threshold"
+    MANUAL = "manual"
+
+
+@dataclass
+class MemoryEntry:
+    """A consolidated memory entry."""
+    type: str  # user, feedback, project
+    content: str
+    created_at: str = field(default_factory=lambda: datetime.now().isoformat())
+    trigger: str = ""
 
 
 @dataclass
@@ -18,12 +37,15 @@ class Task:
 
 
 class DynamicMemory:
-    """In-session dynamic memory for task tracking."""
+    """In-session dynamic memory for task tracking and consolidation."""
 
     def __init__(self):
         self._tasks: dict[str, Task] = {}
         self._task_counter = 0
         self._context: dict[str, Any] = {}
+        self._consolidated: list[MemoryEntry] = []
+        self._recent_interactions: list[str] = []
+        self._max_recent = 5
 
     def add_task(self, description: str) -> Task:
         """Add a new task to track."""
@@ -84,12 +106,6 @@ class DynamicMemory:
         """Get a context value."""
         return self._context.get(key)
 
-    def clear(self) -> None:
-        """Clear all dynamic memory."""
-        self._tasks.clear()
-        self._context.clear()
-        self._task_counter = 0
-
     def summarize(self) -> str:
         """Generate a summary of current dynamic memory state."""
         lines = []
@@ -117,3 +133,28 @@ class DynamicMemory:
                 lines.append(f"- {key}: {value}")
 
         return "\n".join(lines) if lines else "No active tasks or context."
+
+    def add_interaction(self, content: str) -> None:
+        """Track recent interaction for consolidation context."""
+        self._recent_interactions.append(content)
+        if len(self._recent_interactions) > self._max_recent:
+            self._recent_interactions.pop(0)
+
+    def get_recent_context(self) -> str:
+        """Get recent interactions as context for consolidation."""
+        return "\n---\n".join(self._recent_interactions) if self._recent_interactions else ""
+
+    def add_consolidated(self, entry: MemoryEntry) -> None:
+        """Add a consolidated memory entry."""
+        self._consolidated.append(entry)
+
+    def get_consolidated(self) -> list[MemoryEntry]:
+        """Get all consolidated memory entries."""
+        return self._consolidated.copy()
+
+    def clear(self) -> None:
+        """Clear all dynamic memory."""
+        self._tasks.clear()
+        self._context.clear()
+        self._task_counter = 0
+        self._recent_interactions.clear()

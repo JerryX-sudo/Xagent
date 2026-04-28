@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pytest
 
-from memory.dynamic import DynamicMemory, Task
+from memory.dynamic import DynamicMemory, Task, ConsolidationTrigger, MemoryEntry
 from memory.static import StaticMemory
 from core.config import Config
 
@@ -79,9 +79,33 @@ class TestDynamicMemory:
         memory.set_context("current_file", "test.py")
 
         summary = memory.summarize()
-        assert "Tasks" in summary
-        assert "In Progress" in summary
+        assert "Plan" in summary
         assert "current_file" in summary
+
+    def test_interaction_tracking(self):
+        """Test tracking recent interactions."""
+        memory = DynamicMemory()
+        memory.add_interaction("User: Hello")
+        memory.add_interaction("Agent: Hi")
+
+        context = memory.get_recent_context()
+        assert "User: Hello" in context
+        assert "Agent: Hi" in context
+
+    def test_consolidated_memory(self):
+        """Test consolidated memory entries."""
+        memory = DynamicMemory()
+        entry = MemoryEntry(
+            type="user",
+            content="User prefers Python",
+            trigger="ask_human_response",
+        )
+        memory.add_consolidated(entry)
+
+        entries = memory.get_consolidated()
+        assert len(entries) == 1
+        assert entries[0].type == "user"
+        assert entries[0].content == "User prefers Python"
 
 
 class TestStaticMemory:

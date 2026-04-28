@@ -25,6 +25,9 @@ class Config:
     dangerous_commands: list[str] = field(
         default_factory=lambda: ["rm", "sudo", "chmod", "chown", "dd", "mkfs", "kill"]
     )
+    # Memory consolidation settings
+    memory_consolidation_enabled: bool = True
+    memory_token_threshold: float = 0.7  # Trigger consolidation when token usage exceeds this ratio
 
     @classmethod
     def get_config_dir(cls) -> Path:

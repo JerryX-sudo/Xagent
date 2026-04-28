@@ -1,9 +1,9 @@
 """Memory system for Xagent."""
 
-from memory.dynamic import DynamicMemory
+from memory.dynamic import DynamicMemory, ConsolidationTrigger, MemoryEntry
 from memory.static import StaticMemory
 
-__all__ = ["DynamicMemory", "StaticMemory"]
+__all__ = ["DynamicMemory", "StaticMemory", "ConsolidationTrigger", "MemoryEntry"]
 
 
 def get_memory_manager():

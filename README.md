@@ -34,7 +34,8 @@
 - **🛠️ Rich Toolset** - 17+ built-in tools for files, git, web, and system operations  
 - **🔒 Security First** - Permission control with diff preview before dangerous operations
 - **⚡ Smart Caching** - Intelligent request caching to save tokens and reduce costs
-- **💾 Session Management** - Save, load, and export conversations
+- **💾 Session Management** - Save, load, and resume conversations seamlessly
+- **🔄 Auto Session Resume** - Pick up where you left off with `/resume`
 - **🎨 Beautiful CLI** - Customizable themes and intuitive interface
 - **🔌 Plugin System** - Easy to extend with custom tools
 
@@ -120,6 +121,7 @@ You: █
 |---------|-------------|---------|
 | `/help` | Show all available commands | `/help` |
 | `/clear` | Clear current conversation | `/clear` |
+| `/resume` | Resume a recent session (up to 3, expires in 7 days) | `/resume` |
 | `/exit` or `/quit` | Exit Xagent | `/exit` |
 | `/memory` | View or manage persistent memory | `/memory add "Important note"` |
 | `/history` | Show conversation history | `/history` |
@@ -243,10 +245,42 @@ Your plugin will be automatically loaded on the next run.
 ├── 📜 history          # Command history
 ├── ⚡ cache/           # Request cache for token savings
 ├── 💾 sessions/        # Saved conversation sessions
+│   └── auto/           # Auto-saved sessions for /resume
 ├── 📤 exports/         # Exported conversations
 ├── 🔌 plugins/         # Custom tool plugins
 └── 📊 logs/            # Debug and error logs
 ```
+
+### Session Resume
+
+Xagent automatically saves your conversation after each interaction. Use `/resume` to continue where you left off:
+
+```
+  ▶ /resume
+
+╭──────────────────────────────────────────────────────╮
+│ Recent sessions (expires after 7 days):              │
+╰──────────────────────────────────────────────────────╯
+
+Resume Session
+  > 20260428_184206 - Fix the login bug (12 msgs, 04/28 18:42)
+    20260427_103052 - Refactor database module (8 msgs, 04/27 10:30)
+    20260426_091523 - Add unit tests (15 msgs, 04/26 09:15)
+
+╭──────────────────────╮
+│ Conversation History │
+╰──────────────────────╯
+
+  ▶ Fix the login bug
+
+  ◀ I'll help you fix the login bug. Let me first check the auth module...
+
+  ▶ (continue from here)
+```
+
+- Sessions auto-save after each interaction
+- Up to 3 recent sessions are kept
+- Sessions expire after 7 days
 
 ## ⌨️ Keyboard Shortcuts
 

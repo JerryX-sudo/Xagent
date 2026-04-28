@@ -7,11 +7,11 @@ from typing import Any
 from core.config import Config
 from core.session import Session
 from core.cache import RequestCache
-from core.prompts import SYSTEM_PROMPT, MEMORY_INJECTION_TEMPLATE, DYNAMIC_MEMORY_TEMPLATE
+from core.prompts import SYSTEM_PROMPT, MEMORY_INJECTION_TEMPLATE, DYNAMIC_MEMORY_TEMPLATE, MEMORY_CONSOLIDATION_PROMPT
 from core.permission import PermissionManager
 from llm import get_llm_client, LLMResponse
 from tools.registry import ToolRegistry
-from memory.dynamic import DynamicMemory
+from memory.dynamic import DynamicMemory, ConsolidationTrigger, MemoryEntry
 from memory.static import StaticMemory
 from utils.terminal import TerminalUI
 from utils.output import OutputManager
@@ -129,6 +129,14 @@ class Agent:
             # Show progress after completing a plan task
             if name == "plan" and args.get("action") in ("complete", "create"):
                 self._show_plan_progress()
+                # Trigger: task completed
+                if args.get("action") == "complete":
+                    self._maybe_consolidate_memory(ConsolidationTrigger.TASK_COMPLETED)
+
+            # Trigger: ask_human response received
+            if name == "ask_human":
+                self.dynamic_memory.add_interaction(f"User response: {result}")
+                self._maybe_consolidate_memory(ConsolidationTrigger.ASK_HUMAN_RESPONSE)
 
             return result
 
@@ -197,6 +205,9 @@ class Agent:
 
             # Handle final_answer after all tool results are added
             if final_answer_result is not None:
+                # Trigger: before final answer
+                self._maybe_consolidate_memory(ConsolidationTrigger.BEFORE_FINAL_ANSWER)
+                self._persist_consolidated_to_static()
                 self.ui.print_final_answer(final_answer_result)
                 return False, final_answer_result
 
@@ -205,6 +216,80 @@ class Agent:
             # No tool calls, add assistant message
             self.session.add_message("assistant", response.content)
             return False, None
+
+    def _maybe_consolidate_memory(self, trigger: ConsolidationTrigger) -> None:
+        """Conditionally trigger memory consolidation based on event."""
+        if not self.config.memory_consolidation_enabled:
+            return
+
+        # Layer 2: Token threshold check (always triggers if exceeded)
+        if trigger == ConsolidationTrigger.TOKEN_THRESHOLD:
+            self._do_consolidate(trigger)
+            return
+
+        # Layer 1: Event-based - use LLM to judge if worth saving
+        recent_context = self.dynamic_memory.get_recent_context()
+        if not recent_context:
+            return
+
+        result = self._quick_memory_check(trigger, recent_context)
+        if result:
+            entry = MemoryEntry(
+                type=result.get("type", "project"),
+                content=result.get("content", ""),
+                trigger=trigger.value,
+            )
+            self.dynamic_memory.add_consolidated(entry)
+
+    def _quick_memory_check(self, trigger: ConsolidationTrigger, context: str) -> dict | None:
+        """Use LLM to quickly judge if recent context is worth remembering."""
+        prompt = MEMORY_CONSOLIDATION_PROMPT.format(
+            recent_context=context,
+            trigger_event=trigger.value,
+        )
+
+        try:
+            response = self.llm.chat(
+                [{"role": "user", "content": prompt}],
+                tools=None,
+            )
+            result = json.loads(response.content)
+            if result.get("save"):
+                return result
+        except (json.JSONDecodeError, Exception):
+            pass
+        return None
+
+    def _do_consolidate(self, trigger: ConsolidationTrigger) -> None:
+        """Force consolidation when token threshold exceeded."""
+        summary = self.dynamic_memory.summarize()
+        if summary and summary != "No active tasks or context.":
+            entry = MemoryEntry(
+                type="project",
+                content=f"Session state at token threshold:\n{summary}",
+                trigger=trigger.value,
+            )
+            self.dynamic_memory.add_consolidated(entry)
+
+    def _persist_consolidated_to_static(self) -> None:
+        """Persist consolidated memories to static storage at session end."""
+        entries = self.dynamic_memory.get_consolidated()
+        if not entries:
+            return
+
+        for entry in entries:
+            content = f"[{entry.type}] {entry.content}"
+            self.static_memory.append(content)
+
+    def _check_token_threshold(self) -> None:
+        """Check if token usage exceeds threshold and trigger consolidation."""
+        if not self.config.memory_consolidation_enabled:
+            return
+
+        # Estimate based on session tokens
+        threshold = self.config.max_tokens * self.config.memory_token_threshold
+        if self.session.total_tokens > threshold:
+            self._maybe_consolidate_memory(ConsolidationTrigger.TOKEN_THRESHOLD)
 
     def _get_messages_with_dynamic_memory(self) -> list[dict]:
         """Get messages with dynamic memory injected."""
@@ -233,12 +318,17 @@ class Agent:
 
         try:
             self.session.add_message("user", user_input)
+            # Track user input for memory consolidation
+            self.dynamic_memory.add_interaction(f"User: {user_input}")
 
             for iteration in range(self.max_iterations):
                 # Check for interrupt
                 if self._interrupted:
                     self.ui.print_interrupted()
                     return None
+
+                # Check token threshold for memory consolidation
+                self._check_token_threshold()
 
                 messages = self._get_messages_with_dynamic_memory()
                 tools = self.tools.to_openai_functions()
@@ -327,7 +417,7 @@ class Agent:
                             spinner.join(timeout=0.2)
                             sys.stdout.write("\r\033[K")
                             sys.stdout.flush()
-                            self.ui.console.print("Agent: ", end="", style="bold blue")
+                            self.ui.console.print("  ◀ ", end="", style="bold cyan")
                             has_printed_prefix = True
 
                         self.ui.console.print(chunk, end="", highlight=False)
