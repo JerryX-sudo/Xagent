@@ -61,7 +61,6 @@ Pre-built binaries for macOS and Windows are available on the [Releases](https:/
 | Platform | Architecture | Download |
 |----------|-------------|----------|
 | macOS | ARM64 (Apple Silicon) | [xagent-macos-arm64](https://github.com/JerryX-sudo/Xagent/releases/latest) |
-| macOS | x86_64 (Intel) | [xagent-macos-x86_64](https://github.com/JerryX-sudo/Xagent/releases/latest) |
 | Windows | x86_64 | [xagent-windows-x86_64.exe](https://github.com/JerryX-sudo/Xagent/releases/latest) |
 
 After downloading, run directly:
