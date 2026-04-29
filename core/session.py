@@ -28,10 +28,10 @@ class Message:
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for API calls."""
         d: dict[str, Any] = {"role": self.role, "content": self.content}
-        if self.thinking:
+        if self.thinking is not None:
             d["thinking"] = self.thinking
             d["reasoning_content"] = self.thinking
-        if self.thinking_signature:
+        if self.thinking_signature is not None:
             d["thinking_signature"] = self.thinking_signature
         if self.tool_calls:
             d["tool_calls"] = self.tool_calls

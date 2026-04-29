@@ -60,7 +60,7 @@ class OpenAIClient(BaseLLM):
             ]
 
         # Capture reasoning_content (DeepSeek, etc.)
-        reasoning_content = getattr(message, "reasoning_content", None) or None
+        reasoning_content = getattr(message, "reasoning_content", None)
 
         return LLMResponse(
             content=message.content or "",
@@ -109,7 +109,7 @@ class OpenAIClient(BaseLLM):
 
             delta = chunk.choices[0].delta
 
-            if getattr(delta, "reasoning_content", None):
+            if getattr(delta, "reasoning_content", None) is not None:
                 reasoning_parts.append(delta.reasoning_content)
 
             if delta.content:
