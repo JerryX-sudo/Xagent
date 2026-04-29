@@ -40,6 +40,13 @@ jobs:
           pyinstaller --clean \
             --onefile \
             --name "${{ matrix.artifact }}" \
+            --paths . \
+            --hidden-import core \
+            --hidden-import llm \
+            --hidden-import tools \
+            --hidden-import memory \
+            --hidden-import plugins \
+            --hidden-import utils \
             --add-data "assets${{ matrix.data_sep }}assets" \
             cli.py
 
