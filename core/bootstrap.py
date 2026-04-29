@@ -187,9 +187,16 @@ def bootstrap(console: Console) -> Config | None:
 
 def print_config_hint(console: Console) -> None:
     """Print hint about environment variables."""
+    from utils.compat import IS_WINDOWS
+
     console.print()
     console.print("[dim]To skip this setup next time, set environment variables:[/dim]")
-    console.print("  export XAGENT_API_KEY='your-api-key'")
-    console.print("  export XAGENT_MODEL='gpt-4o'  # or claude-sonnet-4-20250514")
-    console.print("  export XAGENT_BASE_URL='https://...'  # optional")
+    if IS_WINDOWS:
+        console.print("  set XAGENT_API_KEY=your-api-key")
+        console.print("  set XAGENT_MODEL=gpt-4o  & REM or claude-sonnet-4-20250514")
+        console.print("  set XAGENT_BASE_URL=https://...  & REM optional")
+    else:
+        console.print("  export XAGENT_API_KEY='your-api-key'")
+        console.print("  export XAGENT_MODEL='gpt-4o'  # or claude-sonnet-4-20250514")
+        console.print("  export XAGENT_BASE_URL='https://...'  # optional")
     console.print()

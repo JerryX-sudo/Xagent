@@ -68,7 +68,8 @@ class GitTool(BaseTool):
             result = subprocess.run(
                 ["git"] + shlex.split(full_args),
                 capture_output=True,
-                text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=30,
             )
 
@@ -109,7 +110,8 @@ class GitStatusTool(BaseTool):
             result = subprocess.run(
                 ["git", "status", "-sb"],
                 capture_output=True,
-                text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=10,
             )
             return result.stdout.strip() or result.stderr.strip() or "(no output)"
@@ -159,7 +161,8 @@ class GitDiffTool(BaseTool):
             result = subprocess.run(
                 cmd,
                 capture_output=True,
-                text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=30,
             )
 
@@ -221,7 +224,8 @@ class GitLogTool(BaseTool):
             result = subprocess.run(
                 cmd,
                 capture_output=True,
-                text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=10,
             )
             return result.stdout.strip() or "No commits"

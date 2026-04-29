@@ -433,7 +433,8 @@ def update():
             result = subprocess.run(
                 ["git", "remote", "get-url", "origin"],
                 capture_output=True,
-                text=True,
+                encoding="utf-8",
+                errors="replace",
                 cwd=os.path.dirname(os.path.abspath(__file__)),
             )
             if result.returncode == 0:
@@ -449,7 +450,8 @@ def update():
         result = subprocess.run(
             [sys.executable, "-m", "pip", "install", "--upgrade", f"git+{repo_url}"],
             capture_output=True,
-            text=True,
+            encoding="utf-8",
+            errors="replace",
         )
         if result.returncode == 0:
             ui.print_success("Xagent updated successfully!")

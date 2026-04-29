@@ -177,7 +177,8 @@ class BashTool(BaseTool):
                 shell=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                text=True,
+                encoding="utf-8",
+                errors="replace",
                 bufsize=1,  # Line buffered
             )
 
