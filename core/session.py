@@ -30,6 +30,7 @@ class Message:
         d: dict[str, Any] = {"role": self.role, "content": self.content}
         if self.thinking:
             d["thinking"] = self.thinking
+            d["reasoning_content"] = self.thinking
         if self.thinking_signature:
             d["thinking_signature"] = self.thinking_signature
         if self.tool_calls:

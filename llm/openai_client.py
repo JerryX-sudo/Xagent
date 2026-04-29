@@ -59,8 +59,12 @@ class OpenAIClient(BaseLLM):
                 for tc in message.tool_calls
             ]
 
+        # Capture reasoning_content (DeepSeek, etc.)
+        reasoning_content = getattr(message, "reasoning_content", None) or None
+
         return LLMResponse(
             content=message.content or "",
+            thinking=reasoning_content,
             tool_calls=tool_calls,
             finish_reason=response.choices[0].finish_reason or "stop",
             usage={
@@ -94,6 +98,7 @@ class OpenAIClient(BaseLLM):
             raise RuntimeError(f"API error: {e}") from e
 
         content_parts: list[str] = []
+        reasoning_parts: list[str] = []
         tool_calls_data: dict[int, dict[str, Any]] = {}
         finish_reason = "stop"
         tool_call_announced: set[int] = set()
@@ -103,6 +108,9 @@ class OpenAIClient(BaseLLM):
                 continue
 
             delta = chunk.choices[0].delta
+
+            if getattr(delta, "reasoning_content", None):
+                reasoning_parts.append(delta.reasoning_content)
 
             if delta.content:
                 content_parts.append(delta.content)
@@ -138,6 +146,7 @@ class OpenAIClient(BaseLLM):
 
         return LLMResponse(
             content="".join(content_parts),
+            thinking="".join(reasoning_parts) if reasoning_parts else None,
             tool_calls=tool_calls,
             finish_reason=finish_reason,
         )
