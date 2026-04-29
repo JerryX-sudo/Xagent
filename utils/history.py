@@ -57,6 +57,17 @@ class KeyboardMonitor:
             self._thread.join(timeout=0.3)
             self._thread = None
 
+    def pause(self) -> None:
+        """Temporarily pause monitoring (e.g., during interactive prompts)."""
+        self._stop.set()
+        if self._thread:
+            self._thread.join(timeout=0.5)
+            self._thread = None
+
+    def resume(self) -> None:
+        """Resume monitoring after pause."""
+        self.start()
+
     def _monitor(self) -> None:
         """Monitor stdin for ESC key."""
         if IS_WINDOWS:

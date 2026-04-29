@@ -90,6 +90,25 @@ def select_option(
     if console is None:
         console = Console()
 
+    # Pause KeyboardMonitor to avoid stdin race
+    from utils.history import KeyboardMonitor
+    monitor = KeyboardMonitor._instance
+    was_running = monitor and monitor._thread and monitor._thread.is_alive()
+    if was_running:
+        monitor.pause()
+
+    try:
+        return _select_option_impl(options, title, console)
+    finally:
+        if was_running:
+            monitor.resume()
+
+
+def _select_option_impl(
+    options: list[SelectOption],
+    title: str,
+    console: Console,
+) -> SelectOption | None:
     selected_idx = 0
     num_options = len(options)
 
