@@ -7,6 +7,17 @@ from openai import OpenAI, APIError, APIConnectionError, AuthenticationError
 from llm.base import BaseLLM, LLMResponse
 
 
+def _get_reasoning_content(obj) -> str | None:
+    """Extract reasoning_content from an OpenAI SDK object (attribute or model_extra)."""
+    rc = getattr(obj, "reasoning_content", None)
+    if rc is not None:
+        return rc
+    model_extra = getattr(obj, "model_extra", None)
+    if model_extra:
+        return model_extra.get("reasoning_content")
+    return None
+
+
 class OpenAIClient(BaseLLM):
     """OpenAI-compatible client (works with OpenAI, LiteLLM, etc.)."""
 
@@ -60,7 +71,7 @@ class OpenAIClient(BaseLLM):
             ]
 
         # Capture reasoning_content (DeepSeek, etc.)
-        reasoning_content = getattr(message, "reasoning_content", None)
+        reasoning_content = _get_reasoning_content(message)
 
         return LLMResponse(
             content=message.content or "",
@@ -109,8 +120,9 @@ class OpenAIClient(BaseLLM):
 
             delta = chunk.choices[0].delta
 
-            if getattr(delta, "reasoning_content", None) is not None:
-                reasoning_parts.append(delta.reasoning_content)
+            rc = _get_reasoning_content(delta)
+            if rc is not None:
+                reasoning_parts.append(rc)
 
             if delta.content:
                 content_parts.append(delta.content)
