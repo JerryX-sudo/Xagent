@@ -40,8 +40,12 @@ class BashTool(BaseTool):
         "required": ["command"],
     }
 
-    # Commands that would cause recursive calls
-    FORBIDDEN_COMMANDS = ["xagent", "python -m xagent", "python3 -m xagent"]
+    # Patterns that would cause recursive calls (token-level matching after shlex.split)
+    FORBIDDEN_PATTERNS: list[list[str]] = [
+        ["xagent"],
+        ["python", "-m", "xagent"],
+        ["python3", "-m", "xagent"],
+    ]
 
     def __init__(
         self,
@@ -60,38 +64,62 @@ class BashTool(BaseTool):
         self._interrupted = False
 
     def _is_forbidden(self, command: str) -> bool:
-        """Check if command would cause recursive xagent call."""
-        cmd_lower = command.lower().strip()
-        for forbidden in self.FORBIDDEN_COMMANDS:
-            if cmd_lower.startswith(forbidden) or f" {forbidden}" in cmd_lower:
-                return True
-            # Also check for pipes/chains
-            for part in cmd_lower.replace("&&", "|").replace(";", "|").split("|"):
-                part = part.strip()
-                if part.startswith(forbidden):
-                    return True
+        """Check if command would cause recursive xagent call.
+
+        Uses shlex.split for proper tokenization, then checks only
+        executable positions (first token and after &&/|/||/;).
+        """
+        try:
+            tokens = shlex.split(command)
+        except ValueError:
+            return True  # Malformed, block it
+
+        if not tokens:
+            return False
+
+        # Positions in token list where a command starts
+        cmd_starts = [0]
+        for i, token in enumerate(tokens):
+            if token in ("&&", "||", "|", ";") and i + 1 < len(tokens):
+                cmd_starts.append(i + 1)
+
+        for pos in cmd_starts:
+            for pattern in self.FORBIDDEN_PATTERNS:
+                if len(pattern) == 1:
+                    # Single-token: match basename (e.g. "xagent" matches "/usr/bin/xagent")
+                    base = tokens[pos].split("/")[-1]
+                    if base == pattern[0]:
+                        return True
+                else:
+                    # Multi-token: match consecutive sequence (e.g. ["python", "-m", "xagent"])
+                    if tokens[pos:pos + len(pattern)] == pattern:
+                        return True
+
         return False
 
     def _is_dangerous(self, command: str) -> bool:
-        """Check if command contains dangerous operations."""
-        try:
-            cmd_parts = shlex.split(command)
-        except ValueError:
-            return True  # Malformed command, treat as dangerous
+        """Check if command contains dangerous operations.
 
-        if not cmd_parts:
+        Uses shlex.split for proper tokenization, checks only
+        executable names at command-start positions.
+        """
+        try:
+            tokens = shlex.split(command)
+        except ValueError:
+            return True  # Malformed, block it
+
+        if not tokens:
             return False
 
-        base_cmd = cmd_parts[0].split("/")[-1]
-        if base_cmd in self.dangerous_commands:
-            return True
+        cmd_starts = [0]
+        for i, token in enumerate(tokens):
+            if token in ("&&", "||", "|", ";") and i + 1 < len(tokens):
+                cmd_starts.append(i + 1)
 
-        for part in command.split("|"):
-            part = part.strip()
-            if part:
-                first_word = part.split()[0].split("/")[-1]
-                if first_word in self.dangerous_commands:
-                    return True
+        for pos in cmd_starts:
+            base = tokens[pos].split("/")[-1]
+            if base in self.dangerous_commands:
+                return True
 
         return False
 

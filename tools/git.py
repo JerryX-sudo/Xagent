@@ -1,5 +1,6 @@
 """Git tools for Xagent."""
 
+import shlex
 import subprocess
 from typing import Any
 
@@ -65,7 +66,7 @@ class GitTool(BaseTool):
 
         try:
             result = subprocess.run(
-                ["git"] + full_args.split(),
+                ["git"] + shlex.split(full_args),
                 capture_output=True,
                 text=True,
                 timeout=30,
