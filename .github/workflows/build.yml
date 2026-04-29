@@ -32,7 +32,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        run: pip install openai anthropic rich pyyaml click diskcache tiktoken pyinstaller
+        run: pip install -e . pyinstaller
 
       - name: Build with PyInstaller
         shell: bash
