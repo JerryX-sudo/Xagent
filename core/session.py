@@ -18,6 +18,7 @@ class Message:
 
     role: str  # "user", "assistant", "system", "tool"
     content: str
+    thinking: str | None = None
     tool_calls: list[dict[str, Any]] | None = None
     tool_call_id: str | None = None
     name: str | None = None
@@ -26,6 +27,8 @@ class Message:
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for API calls."""
         d: dict[str, Any] = {"role": self.role, "content": self.content}
+        if self.thinking:
+            d["thinking"] = self.thinking
         if self.tool_calls:
             d["tool_calls"] = self.tool_calls
         if self.tool_call_id:
@@ -50,6 +53,7 @@ class Session:
         self,
         role: str,
         content: str,
+        thinking: str | None = None,
         tool_calls: list[dict[str, Any]] | None = None,
         tool_call_id: str | None = None,
         name: str | None = None,
@@ -58,6 +62,7 @@ class Session:
         msg = Message(
             role=role,
             content=content,
+            thinking=thinking,
             tool_calls=tool_calls,
             tool_call_id=tool_call_id,
             name=name,

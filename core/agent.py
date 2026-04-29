@@ -165,6 +165,7 @@ class Agent:
             self.session.add_message(
                 "assistant",
                 response.content,
+                thinking=response.thinking,
                 tool_calls=response.tool_calls,
             )
 
@@ -214,7 +215,7 @@ class Agent:
             return True, None
         else:
             # No tool calls, add assistant message
-            self.session.add_message("assistant", response.content)
+            self.session.add_message("assistant", response.content, thinking=response.thinking)
             return False, None
 
     def _maybe_consolidate_memory(self, trigger: ConsolidationTrigger) -> None:
@@ -354,6 +355,7 @@ class Agent:
                     # Cache the response
                     self.cache.set(messages, tools, self.config.model, {
                         "content": response.content,
+                        "thinking": response.thinking,
                         "tool_calls": response.tool_calls,
                         "finish_reason": response.finish_reason,
                         "usage": response.usage,
@@ -447,7 +449,7 @@ class Agent:
         self.session.add_message("user", user_input)
         messages = self.session.get_messages_for_api()
         response = self.llm.chat(messages, tools=None)
-        self.session.add_message("assistant", response.content)
+        self.session.add_message("assistant", response.content, thinking=response.thinking)
         return response
 
     def refresh_memory(self) -> None:

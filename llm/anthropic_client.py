@@ -54,6 +54,8 @@ class AnthropicClient(BaseLLM):
                 anthropic_messages.append({"role": "user", "content": msg["content"]})
             elif role == "assistant":
                 content: list[dict[str, Any]] = []
+                if msg.get("thinking"):
+                    content.append({"type": "thinking", "thinking": msg["thinking"]})
                 if msg.get("content"):
                     content.append({"type": "text", "text": msg["content"]})
                 if msg.get("tool_calls"):
@@ -103,11 +105,14 @@ class AnthropicClient(BaseLLM):
             raise RuntimeError(f"API error: {e}") from e
 
         content_parts = []
+        thinking_parts = []
         tool_calls = []
 
         for block in response.content:
             if block.type == "text":
                 content_parts.append(block.text)
+            elif block.type == "thinking":
+                thinking_parts.append(block.thinking)
             elif block.type == "tool_use":
                 tool_calls.append({
                     "id": block.id,
@@ -120,6 +125,7 @@ class AnthropicClient(BaseLLM):
 
         return LLMResponse(
             content="".join(content_parts),
+            thinking="".join(thinking_parts) if thinking_parts else None,
             tool_calls=tool_calls if tool_calls else None,
             finish_reason="tool_calls" if tool_calls else response.stop_reason or "stop",
             usage={
@@ -155,14 +161,19 @@ class AnthropicClient(BaseLLM):
             raise RuntimeError(f"API error: {e}") from e
 
         content_parts: list[str] = []
+        thinking_parts: list[str] = []
         tool_calls: list[dict[str, Any]] = []
         current_tool: dict[str, Any] | None = None
+        current_thinking: bool = False
         input_json = ""
 
         with stream as s:
             for event in s:
                 if event.type == "content_block_start":
-                    if event.content_block.type == "tool_use":
+                    if event.content_block.type == "thinking":
+                        current_thinking = True
+                    elif event.content_block.type == "tool_use":
+                        current_thinking = False
                         current_tool = {
                             "id": event.content_block.id,
                             "type": "function",
@@ -174,8 +185,12 @@ class AnthropicClient(BaseLLM):
                         input_json = ""
                         # Announce tool call with special marker
                         yield f"\x00TOOL:{event.content_block.name}\x00"
+                    else:
+                        current_thinking = False
                 elif event.type == "content_block_delta":
-                    if hasattr(event.delta, "text"):
+                    if hasattr(event.delta, "thinking"):
+                        thinking_parts.append(event.delta.thinking)
+                    elif hasattr(event.delta, "text"):
                         content_parts.append(event.delta.text)
                         yield event.delta.text
                     elif hasattr(event.delta, "partial_json"):
@@ -185,11 +200,13 @@ class AnthropicClient(BaseLLM):
                         current_tool["function"]["arguments"] = input_json
                         tool_calls.append(current_tool)
                         current_tool = None
+                    current_thinking = False
 
             final_message = s.get_final_message()
 
         return LLMResponse(
             content="".join(content_parts),
+            thinking="".join(thinking_parts) if thinking_parts else None,
             tool_calls=tool_calls if tool_calls else None,
             finish_reason="tool_calls" if tool_calls else "stop",
             usage={

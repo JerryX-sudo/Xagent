@@ -10,6 +10,7 @@ class LLMResponse:
     """Response from LLM."""
 
     content: str
+    thinking: str | None = None
     tool_calls: list[dict[str, Any]] | None = None
     finish_reason: str = "stop"
     usage: dict[str, int] | None = None
