@@ -78,6 +78,7 @@ class Config:
             "model": self.model,
             "max_tokens": self.max_tokens,
             "temperature": self.temperature,
+            "max_iterations": self.max_iterations,
             "cache_ttl": self.cache_ttl,
             "cache_enabled": self.cache_enabled,
             "dangerous_commands": self.dangerous_commands,
