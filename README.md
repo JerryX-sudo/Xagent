@@ -54,15 +54,36 @@
 - Python 3.12 or higher
 - An API key from OpenAI or Anthropic
 
-### Installation
+### Download Binary (No Python Required)
+
+Pre-built binaries for macOS and Windows are available on the [Releases](https://github.com/JerryX-sudo/Xagent/releases) page:
+
+| Platform | Architecture | Download |
+|----------|-------------|----------|
+| macOS | ARM64 (Apple Silicon) | [xagent-macos-arm64](https://github.com/JerryX-sudo/Xagent/releases/latest) |
+| macOS | x86_64 (Intel) | [xagent-macos-x86_64](https://github.com/JerryX-sudo/Xagent/releases/latest) |
+| Windows | x86_64 | [xagent-windows-x86_64.exe](https://github.com/JerryX-sudo/Xagent/releases/latest) |
+
+After downloading, run directly:
+
+```bash
+# macOS
+chmod +x xagent-macos-arm64
+./xagent-macos-arm64
+
+# Windows
+.\xagent-windows-x86_64.exe
+```
+
+### Installation (via pip)
 
 ```bash
 # Using pip
-pip install git+https://github.com/yourusername/xagent.git
+pip install git+https://github.com/JerryX-sudo/Xagent.git
 
 # Or clone and install locally
-git clone https://github.com/yourusername/xagent.git
-cd xagent
+git clone https://github.com/JerryX-sudo/Xagent.git
+cd Xagent
 pip install -e .
 ```
 
@@ -327,7 +348,7 @@ xagent
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/xagent.git
+git clone https://github.com/JerryX-sudo/Xagent.git
 cd xagent
 
 # Create virtual environment
@@ -392,9 +413,8 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 
 ## 📮 Support
 
-- **Issues**: [GitHub Issues](https://github.com/yourusername/xagent/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourusername/xagent/discussions)
-- **Email**: support@xagent.dev
+- **Issues**: [GitHub Issues](https://github.com/JerryX-sudo/Xagent/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/JerryX-sudo/Xagent/discussions)
 
 ---
 
