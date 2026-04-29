@@ -19,9 +19,6 @@ jobs:
           - os: macos-latest
             artifact: xagent-macos-arm64
             data_sep: ':'
-          - os: macos-13
-            artifact: xagent-macos-x86_64
-            data_sep: ':'
           - os: windows-latest
             artifact: xagent-windows-x86_64
             data_sep: ';'
