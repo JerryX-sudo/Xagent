@@ -19,6 +19,7 @@ class Message:
     role: str  # "user", "assistant", "system", "tool"
     content: str
     thinking: str | None = None
+    thinking_signature: str | None = None
     tool_calls: list[dict[str, Any]] | None = None
     tool_call_id: str | None = None
     name: str | None = None
@@ -29,6 +30,8 @@ class Message:
         d: dict[str, Any] = {"role": self.role, "content": self.content}
         if self.thinking:
             d["thinking"] = self.thinking
+        if self.thinking_signature:
+            d["thinking_signature"] = self.thinking_signature
         if self.tool_calls:
             d["tool_calls"] = self.tool_calls
         if self.tool_call_id:
@@ -54,6 +57,7 @@ class Session:
         role: str,
         content: str,
         thinking: str | None = None,
+        thinking_signature: str | None = None,
         tool_calls: list[dict[str, Any]] | None = None,
         tool_call_id: str | None = None,
         name: str | None = None,
@@ -63,6 +67,7 @@ class Session:
             role=role,
             content=content,
             thinking=thinking,
+            thinking_signature=thinking_signature,
             tool_calls=tool_calls,
             tool_call_id=tool_call_id,
             name=name,

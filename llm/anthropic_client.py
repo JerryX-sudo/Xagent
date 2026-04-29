@@ -55,7 +55,10 @@ class AnthropicClient(BaseLLM):
             elif role == "assistant":
                 content: list[dict[str, Any]] = []
                 if msg.get("thinking"):
-                    content.append({"type": "thinking", "thinking": msg["thinking"]})
+                    thinking_block: dict[str, Any] = {"type": "thinking", "thinking": msg["thinking"]}
+                    if msg.get("thinking_signature"):
+                        thinking_block["signature"] = msg["thinking_signature"]
+                    content.append(thinking_block)
                 if msg.get("content"):
                     content.append({"type": "text", "text": msg["content"]})
                 if msg.get("tool_calls"):
@@ -106,6 +109,7 @@ class AnthropicClient(BaseLLM):
 
         content_parts = []
         thinking_parts = []
+        thinking_signature = None
         tool_calls = []
 
         for block in response.content:
@@ -113,6 +117,8 @@ class AnthropicClient(BaseLLM):
                 content_parts.append(block.text)
             elif block.type == "thinking":
                 thinking_parts.append(block.thinking)
+                if hasattr(block, "signature") and block.signature:
+                    thinking_signature = block.signature
             elif block.type == "tool_use":
                 tool_calls.append({
                     "id": block.id,
@@ -126,6 +132,7 @@ class AnthropicClient(BaseLLM):
         return LLMResponse(
             content="".join(content_parts),
             thinking="".join(thinking_parts) if thinking_parts else None,
+            thinking_signature=thinking_signature,
             tool_calls=tool_calls if tool_calls else None,
             finish_reason="tool_calls" if tool_calls else response.stop_reason or "stop",
             usage={
@@ -162,6 +169,7 @@ class AnthropicClient(BaseLLM):
 
         content_parts: list[str] = []
         thinking_parts: list[str] = []
+        thinking_signature: str | None = None
         tool_calls: list[dict[str, Any]] = []
         current_tool: dict[str, Any] | None = None
         current_thinking: bool = False
@@ -172,6 +180,8 @@ class AnthropicClient(BaseLLM):
                 if event.type == "content_block_start":
                     if event.content_block.type == "thinking":
                         current_thinking = True
+                        if hasattr(event.content_block, "signature") and event.content_block.signature:
+                            thinking_signature = event.content_block.signature
                     elif event.content_block.type == "tool_use":
                         current_thinking = False
                         current_tool = {
@@ -207,6 +217,7 @@ class AnthropicClient(BaseLLM):
         return LLMResponse(
             content="".join(content_parts),
             thinking="".join(thinking_parts) if thinking_parts else None,
+            thinking_signature=thinking_signature,
             tool_calls=tool_calls if tool_calls else None,
             finish_reason="tool_calls" if tool_calls else "stop",
             usage={

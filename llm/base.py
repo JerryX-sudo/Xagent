@@ -11,6 +11,7 @@ class LLMResponse:
 
     content: str
     thinking: str | None = None
+    thinking_signature: str | None = None
     tool_calls: list[dict[str, Any]] | None = None
     finish_reason: str = "stop"
     usage: dict[str, int] | None = None
