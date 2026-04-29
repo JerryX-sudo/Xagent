@@ -97,6 +97,29 @@ def test_connection(config: Config, console: Console) -> tuple[bool, str]:
         return False, str(e)
 
 
+def _try_fallback_type(config: Config, console: Console) -> tuple[bool, str] | None:
+    """Try the other model_type if connection failed.
+
+    Returns (success, msg) if fallback was attempted, None to skip.
+    Does NOT fallback if user explicitly set XAGENT_MODEL_TYPE.
+    """
+    if os.environ.get("XAGENT_MODEL_TYPE"):
+        return None
+
+    original_type = config.model_type
+    fallback_type = "anthropic" if original_type != "anthropic" else "openai"
+
+    config.model_type = fallback_type
+    console.print(f"[dim]Inferred '{original_type}' failed, auto-trying '{fallback_type}'...[/dim]")
+    success, msg = test_connection(config, console)
+
+    if success:
+        console.print(f"[yellow]Auto-switched to '{fallback_type}' API type[/yellow]")
+    else:
+        config.model_type = original_type  # revert
+    return success, msg
+
+
 def bootstrap(console: Console) -> Config | None:
     """Bootstrap Xagent configuration.
 
@@ -108,6 +131,7 @@ def bootstrap(console: Console) -> Config | None:
     """
     config = None
     from_env = False
+    tried_fallback = False
 
     while True:
         # First time: try environment variables
@@ -119,6 +143,7 @@ def bootstrap(console: Console) -> Config | None:
             else:
                 config = prompt_for_config(console)
                 from_env = False
+            tried_fallback = False
 
         # Test connection
         success, msg = test_connection(config, console)
@@ -131,6 +156,20 @@ def bootstrap(console: Console) -> Config | None:
             console.print(f"[red]✗ Connection failed: {msg}[/red]")
             console.print()
 
+            # Auto-fallback: try the other API type once
+            if not tried_fallback:
+                tried_fallback = True
+                fb_result = _try_fallback_type(config, console)
+                if fb_result is not None:
+                    success, msg = fb_result
+                    if success:
+                        console.print("[green]✓ Connection successful![/green]")
+                        console.print()
+                        return config
+                    else:
+                        console.print(f"[red]✗ Fallback also failed: {msg}[/red]")
+                        console.print()
+
             # Ask user what to do
             choice = Prompt.ask(
                 "[yellow]What would you like to do?[/yellow]",
@@ -142,6 +181,7 @@ def bootstrap(console: Console) -> Config | None:
                 return None
             elif choice == "change":
                 config = prompt_for_config(console)
+                tried_fallback = False
             # retry: loop again with same config
 
 

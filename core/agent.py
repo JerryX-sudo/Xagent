@@ -13,7 +13,9 @@ from llm import get_llm_client, LLMResponse
 from tools.registry import ToolRegistry
 from memory.dynamic import DynamicMemory, ConsolidationTrigger, MemoryEntry
 from memory.static import StaticMemory
-from utils.terminal import TerminalUI
+from rich.live import Live
+from rich.spinner import Spinner
+from utils.terminal import TerminalUI, TOOL_ICONS
 from utils.output import OutputManager
 
 
@@ -102,8 +104,21 @@ class Agent:
         self.ui.console.print(f"[dim]  ({completed}/{total} completed)[/dim]")
         self.ui.console.print()
 
-    def _execute_tool_call(self, tool_call: dict[str, Any]) -> str:
-        """Execute a single tool call and return the result."""
+    @staticmethod
+    def _get_key_arg(name: str, args: dict) -> str:
+        """Extract the most informative argument for display."""
+        if name == "bash":
+            return args.get("command", "")[:60]
+        if name in ("read_file", "edit_file", "write_file"):
+            return args.get("file_path", "") or args.get("path", "")
+        if name in ("grep", "glob", "search"):
+            return args.get("pattern", "") or args.get("query", "")
+        if name == "final_answer":
+            return args.get("answer", "")[:40]
+        return ""
+
+    def _execute_tool_call(self, tool_call: dict[str, Any], quiet: bool = False) -> tuple[str, float, bool]:
+        """Execute a single tool call. Returns (result, elapsed, success)."""
         func = tool_call.get("function", {})
         name = func.get("name", "")
         args_str = func.get("arguments", "{}")
@@ -111,25 +126,26 @@ class Agent:
         try:
             args = json.loads(args_str)
         except json.JSONDecodeError:
-            return f"Error: Invalid JSON arguments: {args_str}"
+            return f"Error: Invalid JSON arguments: {args_str}", 0, False
 
         # Check for interrupt
         if self._interrupted:
-            return "Operation interrupted by user"
+            return "Operation interrupted by user", 0, False
 
-        self.ui.print_tool_start(name, args)
+        if not quiet:
+            self.ui.print_tool_start(name, args)
         start_time = time.time()
 
         try:
             result = self.tools.execute(name, **args)
             elapsed = time.time() - start_time
             success = not result.startswith("Error:")
-            self.ui.print_tool_end(name, success=success, elapsed=elapsed)
+            if not quiet:
+                self.ui.print_tool_end(name, success=success, elapsed=elapsed)
 
             # Show progress after completing a plan task
             if name == "plan" and args.get("action") in ("complete", "create"):
                 self._show_plan_progress()
-                # Trigger: task completed
                 if args.get("action") == "complete":
                     self._maybe_consolidate_memory(ConsolidationTrigger.TASK_COMPLETED)
 
@@ -138,12 +154,13 @@ class Agent:
                 self.dynamic_memory.add_interaction(f"User response: {result}")
                 self._maybe_consolidate_memory(ConsolidationTrigger.ASK_HUMAN_RESPONSE)
 
-            return result
+            return result, elapsed, success
 
         except Exception as e:
             elapsed = time.time() - start_time
-            self.ui.print_tool_end(name, success=False, message=str(e), elapsed=elapsed)
-            return f"Error: {e}"
+            if not quiet:
+                self.ui.print_tool_end(name, success=False, message=str(e), elapsed=elapsed)
+            return f"Error: {e}", elapsed, False
 
     def _process_response(self, response: LLMResponse) -> tuple[bool, str | None]:
         """Process LLM response, execute tools if needed.
@@ -171,35 +188,61 @@ class Agent:
             )
 
             final_answer_result = None
+            num_tools = len(response.tool_calls)
+            compact = num_tools > 2
+            batch_results: list[dict] = []
+            batch_live: Live | None = None
 
-            for tool_call in response.tool_calls:
-                tool_name = tool_call.get("function", {}).get("name", "")
-                tool_call_id = tool_call.get("id")
+            if compact:
+                batch_live = Live("", console=self.ui.console, refresh_per_second=10, transient=True)
+                batch_live.start()
 
-                # Check for interrupt before executing
-                if self._interrupted:
-                    # Add empty tool result to keep message history valid
+            try:
+                for tool_call in response.tool_calls:
+                    tool_name = tool_call.get("function", {}).get("name", "")
+                    tool_call_id = tool_call.get("id")
+
+                    if self._interrupted:
+                        self.session.add_message(
+                            "tool",
+                            "[interrupted by user]",
+                            tool_call_id=tool_call_id,
+                            name=tool_name,
+                        )
+                        continue
+
+                    if compact and batch_live:
+                        args_str = tool_call.get("function", {}).get("arguments", "{}")
+                        try:
+                            args = json.loads(args_str)
+                        except json.JSONDecodeError:
+                            args = {}
+                        key_arg = self._get_key_arg(tool_name, args)
+                        icon = TOOL_ICONS.get(tool_name, "🔧")
+                        batch_live.update(f"  {icon} [bold]{tool_name}[/bold] [dim]{key_arg}[/dim]")
+                    else:
+                        key_arg = ""
+
+                    result, elapsed, success = self._execute_tool_call(tool_call, quiet=compact)
+
+                    if compact:
+                        batch_results.append({"name": tool_name, "success": success, "elapsed": elapsed, "key_arg": key_arg})
+
                     self.session.add_message(
                         "tool",
-                        "[interrupted by user]",
+                        result,
                         tool_call_id=tool_call_id,
                         name=tool_name,
                     )
-                    continue
 
-                result = self._execute_tool_call(tool_call)
+                    if tool_name == "final_answer":
+                        final_answer_result = result
+            finally:
+                if batch_live:
+                    batch_live.stop()
 
-                # Always add tool result to session first
-                self.session.add_message(
-                    "tool",
-                    result,
-                    tool_call_id=tool_call_id,
-                    name=tool_name,
-                )
-
-                # Check for final_answer after adding result
-                if tool_name == "final_answer":
-                    final_answer_result = result
+            if compact and batch_results:
+                self.ui.print_tool_batch(batch_results)
 
             # If interrupted, stop the loop
             if self._interrupted:
@@ -380,28 +423,20 @@ class Agent:
 
     def _run_stream(self, messages: list[dict], tools: list[dict]) -> LLMResponse:
         """Run streaming LLM call."""
-        import sys
-        import threading
+        import time
 
         gen = self.llm.chat_stream(messages, tools)
         content_parts = []
         response = None
         has_printed_prefix = False
-        stop_spinner = threading.Event()
-        spinner_text = ["Thinking..."]
+        start_time = time.time()
 
-        # Animated spinner in background thread
-        def spinner_thread():
-            frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
-            idx = 0
-            while not stop_spinner.is_set():
-                sys.stdout.write(f"\r\033[K\033[36m{frames[idx]} {spinner_text[0]}\033[0m")
-                sys.stdout.flush()
-                idx = (idx + 1) % len(frames)
-                stop_spinner.wait(0.1)
-
-        # Start spinner
-        spinner = threading.Thread(target=spinner_thread, daemon=True)
+        spinner = Live(
+            Spinner("dots", text="Thinking...", style="cyan"),
+            console=self.ui.console,
+            refresh_per_second=10,
+            transient=True,
+        )
         spinner.start()
 
         try:
@@ -409,19 +444,14 @@ class Agent:
                 try:
                     chunk = next(gen)
                     if chunk:
-                        # Check for tool call marker
                         if chunk.startswith("\x00TOOL:") and chunk.endswith("\x00"):
                             tool_name = chunk[6:-1]
-                            spinner_text[0] = f"Preparing {tool_name}..."
+                            spinner.update(Spinner("dots", text=f"Preparing {tool_name}...", style="cyan"))
                             continue
 
                         if not has_printed_prefix:
-                            # Stop spinner and clear line
-                            stop_spinner.set()
-                            spinner.join(timeout=0.2)
-                            sys.stdout.write("\r\033[K")
-                            sys.stdout.flush()
-                            self.ui.console.print("  ◀ ", end="", style="bold cyan")
+                            spinner.stop()
+                            self.ui.print_response_start()
                             has_printed_prefix = True
 
                         self.ui.console.print(chunk, end="", highlight=False)
@@ -430,16 +460,14 @@ class Agent:
                     response = e.value
                     break
         finally:
-            stop_spinner.set()
-            spinner.join(timeout=0.2)
+            if not has_printed_prefix:
+                spinner.stop()
 
-        # Clear spinner if no content (tool call only)
-        if not has_printed_prefix:
-            sys.stdout.write("\r\033[K")
-            sys.stdout.flush()
+        elapsed = time.time() - start_time
 
         if has_printed_prefix:
             self.ui.console.print()
+            self.ui.print_response_end(elapsed=elapsed)
 
         if response is None:
             response = LLMResponse(content="".join(content_parts))

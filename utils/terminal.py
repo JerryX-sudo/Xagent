@@ -36,6 +36,28 @@ class TerminalUI:
         self.console = Console()
         self._tool_start_time: float | None = None
 
+    def print_response_start(self) -> None:
+        """Print opening frame for assistant response."""
+        import shutil
+        width = shutil.get_terminal_size().columns - 4
+        self.console.print(f"[dim cyan]╭{'─' * width}╮[/dim cyan]")
+
+    def print_response_end(self, elapsed: float | None = None, tokens: dict | None = None) -> None:
+        """Print closing frame for assistant response with timing/token info."""
+        parts = []
+        if elapsed is not None:
+            parts.append(f"{elapsed:.1f}s")
+        if tokens:
+            parts.append(f"↑{tokens.get('prompt', 0)}↓{tokens.get('completion', 0)}")
+        info = " · ".join(parts) if parts else ""
+        import shutil
+        if info:
+            width = max(shutil.get_terminal_size().columns - len(info) - 7, 4)
+            self.console.print(f"[dim cyan]╰{'─' * width} {info} ─╯[/dim cyan]")
+        else:
+            width = shutil.get_terminal_size().columns - 4
+            self.console.print(f"[dim cyan]╰{'─' * width}╯[/dim cyan]")
+
     def print_welcome(self) -> None:
         """Print welcome message."""
         self.console.print()
@@ -70,22 +92,32 @@ class TerminalUI:
         icon = TOOL_ICONS.get(name, "🔧")
         self._tool_start_time = time.time()
 
-        # Use direct stdout for immediate display
+        # Dim separator from previous output
         sys.stdout.write("\n")
         sys.stdout.flush()
-        self.console.print(f"[bold magenta]┌─ {icon} {name}[/bold magenta]")
 
         if args:
-            for key, value in args.items():
-                display_value = str(value)
-                # Truncate long values
-                if len(display_value) > 80:
-                    display_value = display_value[:77] + "..."
-                # Escape any Rich markup in values
-                display_value = display_value.replace("[", "\\[")
-                self.console.print(f"[magenta]│[/magenta]  [dim]{key}:[/dim] {display_value}")
+            # Compact: show first 2 args inline, rest collapsed
+            arg_items = list(args.items())
+            shown = arg_items[:2]
+            hidden_count = len(arg_items) - 2
 
-        # Flush to ensure immediate display
+            arg_parts = []
+            for key, value in shown:
+                v = str(value)
+                if len(v) > 50:
+                    v = v[:47] + "..."
+                v = v.replace("[", "\\[").replace("\n", " ")
+                arg_parts.append(f"[dim]{key}:[/dim] {v}")
+
+            arg_str = "  ".join(arg_parts)
+            if hidden_count > 0:
+                arg_str += f"  [dim]+{hidden_count} more[/dim]"
+
+            self.console.print(f"  [magenta]{icon}[/magenta] [bold]{name}[/bold]  {arg_str}")
+        else:
+            self.console.print(f"  [magenta]{icon}[/magenta] [bold]{name}[/bold]")
+
         sys.stdout.flush()
 
     def print_tool_end(self, name: str, success: bool = True, message: str | None = None, elapsed: float | None = None) -> None:
@@ -95,11 +127,11 @@ class TerminalUI:
         self._tool_start_time = None
 
         if success:
-            status = "[green]✓ done[/green]"
+            status = "[green]✓[/green]"
         else:
-            status = "[red]✗ failed[/red]"
+            status = "[red]✗[/red]"
 
-        msg = f"[magenta]└─[/magenta] {status} [dim]({elapsed:.2f}s)[/dim]"
+        msg = f"  {status} [dim]({elapsed:.2f}s)[/dim]"
         if message:
             msg += f" [dim]{message}[/dim]"
         self.console.print(msg)
@@ -188,6 +220,42 @@ class TerminalUI:
         """Print syntax-highlighted code."""
         syntax = Syntax(code, language, theme="monokai", line_numbers=True)
         self.console.print(syntax)
+
+    def print_tool_batch(self, results: list[dict]) -> None:
+        """Print compact batch with deduplication, showing key args (file paths etc.)."""
+        # Deduplicate consecutive same-name tools, collect unique key_args
+        deduped: list[dict] = []
+        for r in results:
+            if deduped and deduped[-1]["name"] == r["name"]:
+                prev = deduped[-1]
+                prev["count"] = prev.get("count", 1) + 1
+                prev["elapsed"] = prev.get("elapsed", 0) + r.get("elapsed", 0)
+                prev["success"] = prev["success"] and r["success"]
+                ka = r.get("key_arg", "")
+                if ka and ka not in prev.setdefault("key_args", []):
+                    prev["key_args"].append(ka)
+            else:
+                entry = {**r, "count": 1}
+                ka = r.get("key_arg", "")
+                entry["key_args"] = [ka] if ka else []
+                deduped.append(entry)
+
+        parts = []
+        for r in deduped:
+            icon = TOOL_ICONS.get(r["name"], "🔧")
+            status = "[green]✓[/green]" if r["success"] else "[red]✗[/red]"
+            count = f"[dim]×{r['count']}[/dim]" if r["count"] > 1 else ""
+
+            key_args = r.get("key_args", [])
+            if key_args:
+                escaped = [ka.replace("[", "\\[") for ka in key_args[:3]]
+                suffix = "[dim] …[/dim]" if len(key_args) > 3 else ""
+                args_display = f" [dim]{', '.join(escaped)}{suffix}[/dim]"
+            else:
+                args_display = ""
+
+            parts.append(f"{icon} {status} [bold]{r['name']}[/bold]{count}{args_display} [dim]({r['elapsed']:.2f}s)[/dim]")
+        self.console.print("  " + "  ".join(parts))
 
     def print_final_answer(self, answer: str) -> None:
         """Print the final answer."""
