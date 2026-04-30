@@ -8,13 +8,29 @@ from llm.base import BaseLLM, LLMResponse
 
 
 def _get_reasoning_content(obj) -> str | None:
-    """Extract reasoning_content from an OpenAI SDK object (attribute or model_extra)."""
+    """Extract reasoning_content from any SDK object, trying every possible location."""
+    if obj is None:
+        return None
+    # Direct attribute
     rc = getattr(obj, "reasoning_content", None)
-    if rc is not None:
+    if rc:
         return rc
+    # model_extra dict (Pydantic v2)
     model_extra = getattr(obj, "model_extra", None)
     if model_extra:
-        return model_extra.get("reasoning_content")
+        rc = model_extra.get("reasoning_content")
+        if rc:
+            return rc
+        # Also try 'reasoning' alias
+        rc = model_extra.get("reasoning")
+        if rc:
+            return rc
+    # Try __dict__ for raw attributes
+    raw = getattr(obj, "__dict__", {})
+    if raw:
+        rc = raw.get("reasoning_content") or raw.get("reasoning")
+        if rc:
+            return rc
     return None
 
 
@@ -55,6 +71,22 @@ class OpenAIClient(BaseLLM):
             raise RuntimeError(f"API error: {e}") from e
 
         message = response.choices[0].message
+
+        # Debug: dump message structure to file to find reasoning_content location
+        try:
+            import json as _json
+            dump = {
+                "type": str(type(message)),
+                "dir": [a for a in dir(message) if not a.startswith("_")],
+                "content": message.content,
+                "has_model_extra": hasattr(message, "model_extra"),
+                "model_extra_keys": list(message.model_extra.keys()) if hasattr(message, "model_extra") and message.model_extra else None,
+                "raw_vars": {k: str(v)[:200] for k, v in vars(message).items() if not k.startswith("_")},
+            }
+            with open("/tmp/xagent_debug_msg.json", "w") as f:
+                _json.dump(dump, f, indent=2, default=str)
+        except Exception:
+            pass
 
         tool_calls = None
         if message.tool_calls:
@@ -114,11 +146,30 @@ class OpenAIClient(BaseLLM):
         finish_reason = "stop"
         tool_call_announced: set[int] = set()
 
+        first_chunk = True
         for chunk in stream:
             if not chunk.choices:
                 continue
 
             delta = chunk.choices[0].delta
+
+            # Debug first chunk delta structure
+            if first_chunk:
+                first_chunk = False
+                try:
+                    import json as _json
+                    dump = {
+                        "type_delta": str(type(delta)),
+                        "type_choice": str(type(chunk.choices[0])),
+                        "delta_dir": [a for a in dir(delta) if not a.startswith("_")],
+                        "delta_model_extra_keys": list(delta.model_extra.keys()) if hasattr(delta, "model_extra") and delta.model_extra else None,
+                        "delta_raw_vars": {k: str(v)[:200] for k, v in vars(delta).items() if not k.startswith("_")},
+                        "choice_model_extra_keys": list(chunk.choices[0].model_extra.keys()) if hasattr(chunk.choices[0], "model_extra") and chunk.choices[0].model_extra else None,
+                    }
+                    with open("/tmp/xagent_debug_stream.json", "w") as f:
+                        _json.dump(dump, f, indent=2, default=str)
+                except Exception:
+                    pass
 
             # Always capture reasoning_content (DeepSeek reasoner requires it back)
             rc = _get_reasoning_content(delta) or _get_reasoning_content(chunk.choices[0])
