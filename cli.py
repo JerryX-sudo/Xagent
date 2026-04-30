@@ -85,12 +85,16 @@ def handle_config(agent: Agent) -> None:
     def set_api_key(v):
         config.api_key = v
 
+    def toggle_reasoning(v):
+        config.reasoning_enabled = v.lower() in ("true", "yes", "1", "on")
+
     config_items = [
         ("Model", "LLM model to use", config.model, set_model),
         ("Max Iterations", "Maximum agent loop iterations", str(config.max_iterations), set_max_iterations),
         ("Temperature", "Model temperature (0-1)", str(config.temperature), set_temperature),
         ("Max Tokens", "Maximum response tokens", str(config.max_tokens), set_max_tokens),
         ("Base URL", "API base URL (optional)", config.base_url or "", set_base_url),
+        ("Reasoning", "Enable thinking/reasoning (true/false)", str(config.reasoning_enabled).lower(), toggle_reasoning),
         ("API Key", "API key", config.api_key, set_api_key),
     ]
 
