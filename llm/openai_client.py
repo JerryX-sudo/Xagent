@@ -18,6 +18,12 @@ def _get_reasoning_content(obj) -> str | None:
     return None
 
 
+def _strip_reasoning(messages: list[dict]) -> list[dict]:
+    """Remove reasoning/thinking fields from messages to avoid API compat issues."""
+    drop = {"reasoning_content", "thinking", "thinking_signature"}
+    return [{k: v for k, v in m.items() if k not in drop} for m in messages]
+
+
 class OpenAIClient(BaseLLM):
     """OpenAI-compatible client (works with OpenAI, LiteLLM, etc.)."""
 
@@ -38,6 +44,9 @@ class OpenAIClient(BaseLLM):
         tools: list[dict[str, Any]] | None = None,
     ) -> LLMResponse:
         """Send a chat request and return the response."""
+        if not self.config.reasoning_enabled:
+            messages = _strip_reasoning(messages)
+
         kwargs: dict[str, Any] = {
             "model": self.config.model,
             "messages": messages,
@@ -91,6 +100,9 @@ class OpenAIClient(BaseLLM):
         tools: list[dict[str, Any]] | None = None,
     ) -> Generator[str, None, LLMResponse]:
         """Stream a chat response, yielding content chunks."""
+        if not self.config.reasoning_enabled:
+            messages = _strip_reasoning(messages)
+
         kwargs: dict[str, Any] = {
             "model": self.config.model,
             "messages": messages,

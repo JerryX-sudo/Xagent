@@ -27,6 +27,8 @@ class Config:
     )
     # Memory consolidation settings
     memory_consolidation_enabled: bool = True
+    # Reasoning/thinking mode (off by default to avoid API compat issues)
+    reasoning_enabled: bool = False
     memory_token_threshold: float = 0.7  # Trigger consolidation when token usage exceeds this ratio
 
     @classmethod
