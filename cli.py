@@ -85,10 +85,17 @@ def handle_config(agent: Agent) -> None:
     def set_api_key(v):
         config.api_key = v
 
+    def set_model_type(v):
+        if v in ("openai", "anthropic", "litellm"):
+            config.model_type = v
+        else:
+            ui.print_error("Invalid model type. Use: openai, anthropic, or litellm")
+
     def toggle_reasoning(v):
         config.reasoning_enabled = v.lower() in ("true", "yes", "1", "on")
 
     config_items = [
+        ("Model Type", "API type (openai, anthropic, or litellm)", config.model_type, set_model_type),
         ("Model", "LLM model to use", config.model, set_model),
         ("Max Iterations", "Maximum agent loop iterations", str(config.max_iterations), set_max_iterations),
         ("Temperature", "Model temperature (0-1)", str(config.temperature), set_temperature),
