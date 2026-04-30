@@ -70,8 +70,10 @@ class OpenAIClient(BaseLLM):
                 for tc in message.tool_calls
             ]
 
-        # Capture reasoning_content only when enabled
-        reasoning_content = _get_reasoning_content(message) if self.config.reasoning_enabled else None
+        # Capture reasoning_content from message (also check choice level for DeepSeek compat)
+        reasoning_content = None
+        if self.config.reasoning_enabled:
+            reasoning_content = _get_reasoning_content(message) or _get_reasoning_content(response.choices[0])
 
         return LLMResponse(
             content=message.content or "",
@@ -121,7 +123,7 @@ class OpenAIClient(BaseLLM):
             delta = chunk.choices[0].delta
 
             if self.config.reasoning_enabled:
-                rc = _get_reasoning_content(delta)
+                rc = _get_reasoning_content(delta) or _get_reasoning_content(chunk.choices[0])
                 if rc is not None:
                     reasoning_parts.append(rc)
 
