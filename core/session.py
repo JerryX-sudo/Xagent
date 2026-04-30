@@ -25,14 +25,17 @@ class Message:
     name: str | None = None
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self, reasoning_enabled: bool = True) -> dict[str, Any]:
         """Convert to dictionary for API calls."""
         d: dict[str, Any] = {"role": self.role, "content": self.content}
         if self.thinking is not None:
-            d["thinking"] = self.thinking
+            # reasoning_content must always be sent back (DeepSeek reasoner requirement)
             d["reasoning_content"] = self.thinking
+            if reasoning_enabled:
+                d["thinking"] = self.thinking
         if self.thinking_signature is not None:
-            d["thinking_signature"] = self.thinking_signature
+            if reasoning_enabled:
+                d["thinking_signature"] = self.thinking_signature
         if self.tool_calls:
             d["tool_calls"] = self.tool_calls
         if self.tool_call_id:
@@ -80,9 +83,9 @@ class Session:
         if not self.title and role == "user" and content:
             self.title = content[:50] + ("..." if len(content) > 50 else "")
 
-    def get_messages_for_api(self) -> list[dict[str, Any]]:
+    def get_messages_for_api(self, reasoning_enabled: bool = True) -> list[dict[str, Any]]:
         """Get messages formatted for API calls."""
-        return [msg.to_dict() for msg in self.messages]
+        return [msg.to_dict(reasoning_enabled=reasoning_enabled) for msg in self.messages]
 
     def clear(self) -> None:
         """Clear all messages but keep session metadata."""

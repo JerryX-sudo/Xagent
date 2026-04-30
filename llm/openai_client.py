@@ -72,22 +72,6 @@ class OpenAIClient(BaseLLM):
 
         message = response.choices[0].message
 
-        # Debug: dump message structure to file to find reasoning_content location
-        try:
-            import json as _json
-            dump = {
-                "type": str(type(message)),
-                "dir": [a for a in dir(message) if not a.startswith("_")],
-                "content": message.content,
-                "has_model_extra": hasattr(message, "model_extra"),
-                "model_extra_keys": list(message.model_extra.keys()) if hasattr(message, "model_extra") and message.model_extra else None,
-                "raw_vars": {k: str(v)[:200] for k, v in vars(message).items() if not k.startswith("_")},
-            }
-            with open("/tmp/xagent_debug_msg.json", "w") as f:
-                _json.dump(dump, f, indent=2, default=str)
-        except Exception:
-            pass
-
         tool_calls = None
         if message.tool_calls:
             tool_calls = [
@@ -102,7 +86,7 @@ class OpenAIClient(BaseLLM):
                 for tc in message.tool_calls
             ]
 
-        # Always capture reasoning_content (DeepSeek reasoner requires it back)
+        # Always capture reasoning_content — DeepSeek reasoner requires it back in subsequent requests
         reasoning_content = _get_reasoning_content(message) or _get_reasoning_content(response.choices[0])
 
         return LLMResponse(
@@ -146,32 +130,13 @@ class OpenAIClient(BaseLLM):
         finish_reason = "stop"
         tool_call_announced: set[int] = set()
 
-        first_chunk = True
         for chunk in stream:
             if not chunk.choices:
                 continue
 
             delta = chunk.choices[0].delta
 
-            # Debug first chunk delta structure
-            if first_chunk:
-                first_chunk = False
-                try:
-                    import json as _json
-                    dump = {
-                        "type_delta": str(type(delta)),
-                        "type_choice": str(type(chunk.choices[0])),
-                        "delta_dir": [a for a in dir(delta) if not a.startswith("_")],
-                        "delta_model_extra_keys": list(delta.model_extra.keys()) if hasattr(delta, "model_extra") and delta.model_extra else None,
-                        "delta_raw_vars": {k: str(v)[:200] for k, v in vars(delta).items() if not k.startswith("_")},
-                        "choice_model_extra_keys": list(chunk.choices[0].model_extra.keys()) if hasattr(chunk.choices[0], "model_extra") and chunk.choices[0].model_extra else None,
-                    }
-                    with open("/tmp/xagent_debug_stream.json", "w") as f:
-                        _json.dump(dump, f, indent=2, default=str)
-                except Exception:
-                    pass
-
-            # Always capture reasoning_content (DeepSeek reasoner requires it back)
+            # Always capture reasoning_content — DeepSeek reasoner requires it back
             rc = _get_reasoning_content(delta) or _get_reasoning_content(chunk.choices[0])
             if rc is not None:
                 reasoning_parts.append(rc)
