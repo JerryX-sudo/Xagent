@@ -338,7 +338,9 @@ class Agent:
 
     def _get_messages_with_dynamic_memory(self) -> list[dict]:
         """Get messages with dynamic memory injected."""
-        messages = self.session.get_messages_for_api()
+        messages = self.session.get_messages_for_api(
+            reasoning_enabled=self.config.reasoning_enabled,
+        )
 
         # Inject dynamic memory summary if exists
         summary = self.dynamic_memory.summarize()
@@ -477,7 +479,9 @@ class Agent:
     def run_single(self, user_input: str) -> LLMResponse:
         """Run a single LLM call without the agent loop."""
         self.session.add_message("user", user_input)
-        messages = self.session.get_messages_for_api()
+        messages = self.session.get_messages_for_api(
+            reasoning_enabled=self.config.reasoning_enabled,
+        )
         response = self.llm.chat(messages, tools=None)
         self.session.add_message("assistant", response.content, thinking=response.thinking, thinking_signature=response.thinking_signature)
         return response
