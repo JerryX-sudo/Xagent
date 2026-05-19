@@ -269,8 +269,10 @@ def handle_command(cmd: str, agent: Agent, skills: SkillRegistry) -> bool:
     elif command == "/history":
         for msg in agent.session.messages:
             if msg.role != "system":
-                content_preview = msg.content[:100] if msg.content else "(no content)"
-                ui.console.print(f"[dim]{msg.role}:[/dim] {content_preview}")
+                content_preview = (msg.content or "(no content)")[:120]
+                content_preview = content_preview.replace("\n", " ")
+                icon = "▶" if msg.role == "user" else "◀" if msg.role == "assistant" else " ⚙"
+                ui.console.print(f"  {icon} [dim]{msg.role}[/dim] {content_preview}")
 
     elif command == "/memory":
         if len(parts) == 1:
